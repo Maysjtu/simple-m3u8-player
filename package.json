@@ -1,0 +1,38 @@
+{
+  "name": "simple-m3u8-player",
+  "version": "1.0.0",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "dependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Maysjtu/simple-m3u8-player.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Maysjtu/simple-m3u8-player/issues"
+  },
+  "homepage": "https://github.com/Maysjtu/simple-m3u8-player#readme",
+  "description": "",
+  "devDependencies": {
+    "babel-cli": "^6.26.0",
+    "babel-core": "^6.26.3",
+    "babel-preset-es2015": "^6.24.1",
+    "browserify": "^16.2.2",
+    "gulp": "^3.9.1",
+    "gulp-babel": "^7.0.1",
+    "gulp-concat": "^2.6.1",
+    "gulp-cssnano": "^2.1.3",
+    "gulp-rename": "^1.3.0",
+    "gulp-uglify": "^3.0.0",
+    "m3u8-parser": "^4.2.0",
+    "mux.js": "^4.4.1",
+    "vinyl-source-stream": "^2.0.0"
+  },
+  "scripts": {
+    "dev": "gulp start"
+  }
+}
