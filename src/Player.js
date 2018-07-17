@@ -1,157 +1,194 @@
-/*
-* @Author: Mayde
-* @Email:  maysjtu@163.com
-* @Date:   2018-07-11 18:57:04
-* @Last Modified by:   Mayde
-* @Last Modified time: 2018-07-11 20:14:02
-*/
+
 import m3u8Parser from 'm3u8-parser'
-import mp4 from 'mux.js/lib/mp4';
+import {resolveUrl} from './utils/resolve-url'
+import {getAbsoluteUrl} from './utils/resolve-url'
+import window from 'global/window'
+import Segment from "./Segment";
+import EventBus from './utils/event-bus'
 
 export default class Player {
+    constructor(id) {
+        this.playerBox = document.getElementById(id);
+        this.mime = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
+    }
 
-  constructor(id) {
-  	this.playerBox = document.getElementById(id);
-	this.mime = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
-  }
+    fetchM3U8(sourceFile) {
+        let self = this;
+        this.sourceFile = getAbsoluteUrl(sourceFile);
+        console.log('sourceFile', this.sourceFile);
+        this.parser = new m3u8Parser.Parser();
+        fetch(this.sourceFile, {})
+            .then(function (response) {
+                return response.text();
+            }).then(function (data) {
+            self.parseM3U8(data);
+        });
+    }
 
-  initPlay() {
-  	if(!window.MediaSource) {
-  		this.log('Your browser not support MSE');
-  	}
-  	this.clearUp();
-  	this.videoElement = document.createElement('video');
-  	this.videoElement.setAttribute('controls', true);
-  	this.mediaSource = new MediaSource();
-  	this.mediaSource.addEventListener('sourceopen', () => {
-        this.mediaSource.duration = this.totalDuration;
-        this.log('Creating sourceBuffer');
-  		this.createSourceBuffer();
-  	});
+    parseM3U8(data) {
+        this.parser.push(data);
+        this.parser.end();
+        this.playManifest = this.parser.manifest;
+        this.totalDuration = 0;
+        this.playManifest.segments.forEach((segment, index) => {
+            segment.uri = resolveUrl(this.sourceFile, segment.uri);
+            let segmentInstance = new Segment(index, segment.uri, true, this.totalDuration, this.totalDuration + segment.duration, segment.timeline);
+            this.totalDuration += segment.duration;
+            if (!this.segments) {
+                this.segments = [];
+            }
+            this.segments.push(segmentInstance);
+        });
+        this.log('Get manifest');
+        console.log(this.playManifest);
+        this.initPlay();
+    }
 
-  	this.videoElement.src = window.URL.createObjectURL(this.mediaSource);
-  	this.playerBox.appendChild(this.videoElement);
-  	// this.watchVideoOperation();
+    bindEvent() {
+        EventBus.on('remuxed', (segment) => {
+            console.log('remuxed', segment);
+            this.bufferQueue.push(segment);
+            if (!this.sourceBuffer.updating && this.mediaSource.readyState === 'open') {
+                this.flushBufferQueue();
+            }
+        });
+    }
 
-  	this.transmuxer = new mp4.Transmuxer();
-  	this.createdInitSegment = false;
-  	this.remuxedSegments = [];
-  	this.remuxedInitSegment = null;
-  }
+    initPlay() {
+        if (!window.MediaSource) {
+            this.log('Your browser not support MSE');
+        }
+        this.clearUp();
+        this.bindEvent();
+        this.videoElement = document.createElement('video');
+        this.videoElement.setAttribute('controls', true);
+        this.mediaSource = new MediaSource();
+        this.mediaSource.addEventListener('sourceopen', () => {
+            this.mediaSource.duration = this.totalDuration;
+            this.log('Creating sourceBuffer');
+            this.createSourceBuffer();
+        });
 
-  // watchVideoOperation() {
-  // 	this.videoElement.addEventListener('seeking',(e) => {
-  // 		console.log(e);
-  // 		let timeStamp = e.timeStamp/1000;
-  //
-	// })
-  // }
+        this.videoElement.src = window.URL.createObjectURL(this.mediaSource);
+        this.playerBox.appendChild(this.videoElement);
+        this.bufferQueue = [];
+        this.updatingSegment = null;
+    }
 
-  createSourceBuffer() {
-  	window.URL.revokeObjectURL(this.videoElement.src);
-  	this.log('create sourcebuffer');
-  	this.sourceBuffer = this.mediaSource.addSourceBuffer(this.mime);
-  	this.sourceBuffer.addEventListener('updateend', () => {
-  		this.log('Ready');
-  		this.updateEnd();
-  	});
+    watchVideoOperation() {
+        this.videoElement.addEventListener('seeking', (e) => {
+            console.log('seeking');
+        });
+        this.videoElement.addEventListener('timeupdate', (e) => {
+            this.downloadUpcomingSegment();
+        });
+    }
 
-  	this.getRemuxedSegments();
-	this.index = 0;
-	this.fetchSegment(this.index);
-  }
-  getRemuxedSegments() {
-  	this.remuxedIndex = -1;
-  	this.transmuxer.on('data',(segment) => {
-	  	console.log('get transmuxer segment', this.remuxedIndex, segment);
-	  	this.remuxedSegments.push(segment);
-	  	if(!this.remuxedInitSegment) {
-			this.remuxedInitSegment = segment.initSegment;
-	  	}
-	  	this.appendBuffer();
-  	});
-  }
+    createSourceBuffer() {
+        window.URL.revokeObjectURL(this.videoElement.src);
+        this.log('create sourcebuffer');
+        this.sourceBuffer = this.mediaSource.addSourceBuffer(this.mime);
+        this.sourceBuffer.addEventListener('updateend', () => {
+            this.log('Ready');
+            // this.updateEnd();
+            this.flushBufferQueue();
+        });
+        this.watchVideoOperation();
+        this.downloadInitSegment();
+    }
 
-  updateEnd() {
-  	if (!this.sourceBuffer.updating && this.mediaSource.readyState === 'open'
-		&& this.index == this.playManifest.segments.length - 1) {
-	  	this.mediaSource.endOfStream();
-	  	// this.videoElement.play();
-	  	return;
-  	}
-  	this.index ++;
-  	this.fetchSegment(this.index);
-  }
+    downloadInitSegment() {
+        console.log('download init');
+        this.segments[0].isInitSegment = true;
+        this.segments[0].download();
+    }
 
-  appendBuffer() {
-  	this.remuxedIndex++;
-  	let bytes = null, offset = 0;
+    downloadUpcomingSegment() {
+        let nextSegments = this.segments.filter((segment) => {
+            return (!segment.requested && segment.timeStart <= this.videoElement.currentTime + 5 && segment.timeEnd > this.videoElement.currentTime);
+        });
+        if (nextSegments.length) {
+            nextSegments.forEach((segment) => {
+                segment.download();
+            })
+        } else {
+            if (this.segments.filter((segment) => {
+                    return !segment.requested;
+                }).length === 0) {
+                this.log("Finished buffering whole video");
+            } else {
+                this.log("Finished buffering ahead");
+            }
+        }
 
-	if(!this.createdInitSegment) {
-        bytes = new Uint8Array(this.remuxedInitSegment.byteLength + this.remuxedSegments[this.remuxedIndex].data.byteLength);
-        bytes.set(this.remuxedInitSegment, offset);
-        offset += this.remuxedInitSegment.byteLength;
-        let segmentOffset = offset;
-        bytes.set(this.remuxedSegments[this.remuxedIndex].data, segmentOffset);
-        this.sourceBuffer.appendBuffer(bytes);
-        this.createdInitSegment = true;
-	} else {
-		this.sourceBuffer.appendBuffer(this.remuxedSegments[this.remuxedIndex].data);
-	}
-  }
-  parseM3U8(data) {
-      this.parser.push(data);
-      this.parser.end();
-      this.playManifest = this.parser.manifest;
-      this.totalDuration = 0;
-	  this.playManifest.segments.forEach((segment)=>{
-	  	this.totalDuration += segment.duration;
-	  });
-      this.log('Get manifest');
-      console.log(this.playManifest);
-      this.initPlay();
-  }
+    }
 
-  fetchM3U8(sourceFile) {
-  	let self = this;
-    this.sourceFile = sourceFile;
-    this.parser = new m3u8Parser.Parser();
-	fetch(this.sourceFile, {})
-	.then(function(response){
-		return response.text();
-	}).then(function(data){
-		self.parseM3U8(data);
-	});
-  }
+    concatBuffer() {
+        let bytesLength = 0, offset = 0;
+        this.bufferQueue.forEach((segment) => {
+            segment.buffered = true;
+            bytesLength += segment.bufferData.length;
+        });
+        let resultsBuffer = new Uint8Array(bytesLength);
+        this.bufferQueue.forEach((segment) => {
+            bytesLength += segment.bufferData.length;
+            resultsBuffer.set(segment.bufferData, offset);
+            offset += segment.bufferData.length;
+        });
+        return resultsBuffer;
+    }
 
-  fetchSegment(index) {
-  	let self = this;
-	let videoUrl = '../assets/' + this.playManifest.segments[index]['uri'];
-	self.log(`get ${self.playManifest.segments[index]['uri']}`);
-    fetch(videoUrl, {})
-	.then(function(response){
-		return response.arrayBuffer();
-	}).then(function(arrayBuffer){
-		self.transmuxer.push(new Uint8Array(arrayBuffer));
-		self.transmuxer.flush();
-	})
-  }
+    flushBufferQueue() {
+        if (this.sourceBuffer.updating || !this.bufferQueue.length) {
+            this.checkEnd();
+            return;
+        }
+        let bufferData = this.concatBuffer();
+        //!使用单独transmuxer的时候segment上的时间戳信息会丢失？看一下mux的源码，查找原因。
+        this.timestampOffset = this.bufferQueue[0].timeStart;
+        this.bufferQueue = [];
+        this.appendBuffer(bufferData);
+    }
 
-  log(text) {
-  	if(!this.logBox) {
-  		this.logBox = document.createElement('div');
-  		this.playerBox.appendChild(this.logBox);
-  	}
-  	this.logBox.innerHTML = text;
-  }
+    checkEnd() {
+        let unBuffered = this.segments.filter((segment) => {
+            return !segment.buffered;
+        });
+        if(!unBuffered.length) {
+            this.mediaSource.endOfStream();
+            this.log('MediaSource End');
+        }
+    }
 
-  clearUp() {
-  	if(this.videoElement) {
-  		this.videoElement.remove();
-  		delete this.mediaSource;
-  		delete this.sourceBuffer;
-  		delete this.parser;
-  		delete this.transmuxer;
-  	}
-  }
+    updateEnd() {
+        if (!this.sourceBuffer.updating && this.mediaSource.readyState === 'open'
+            && this.index == this.playManifest.segments.length - 1) {
+            // this.videoElement.play();
+            return;
+        }
+    }
+
+    appendBuffer(data) {
+        console.log('apendding');
+
+        this.sourceBuffer.timestampOffset = this.timestampOffset;
+        this.sourceBuffer.appendBuffer(data);
+    }
+
+    log(text) {
+        if (!this.logBox) {
+            this.logBox = document.createElement('div');
+            this.playerBox.appendChild(this.logBox);
+        }
+        this.logBox.innerHTML = text;
+    }
+
+    clearUp() {
+        if (this.videoElement) {
+            this.videoElement.remove();
+            delete this.mediaSource;
+            delete this.sourceBuffer;
+            delete this.bufferQueue;
+        }
+    }
 }

@@ -2,204 +2,344 @@
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
-  value: true
+    value: true
 });
 
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }(); /*
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     * @Author: Mayde
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     * @Email:  maysjtu@163.com
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     * @Date:   2018-07-11 18:57:04
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     * @Last Modified by:   Mayde
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     * @Last Modified time: 2018-07-11 20:14:02
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     */
-
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 var _m3u8Parser = require('m3u8-parser');
 
 var _m3u8Parser2 = _interopRequireDefault(_m3u8Parser);
 
-var _mp = require('mux.js/lib/mp4');
+var _resolveUrl = require('./utils/resolve-url');
 
-var _mp2 = _interopRequireDefault(_mp);
+var _window = require('global/window');
+
+var _window2 = _interopRequireDefault(_window);
+
+var _Segment = require('./Segment');
+
+var _Segment2 = _interopRequireDefault(_Segment);
+
+var _eventBus = require('./utils/event-bus');
+
+var _eventBus2 = _interopRequireDefault(_eventBus);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 var Player = function () {
-  function Player(id) {
-    _classCallCheck(this, Player);
+    function Player(id) {
+        _classCallCheck(this, Player);
 
-    this.playerBox = document.getElementById(id);
-    this.mime = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
-  }
-
-  _createClass(Player, [{
-    key: 'initPlay',
-    value: function initPlay() {
-      var _this = this;
-
-      if (!window.MediaSource) {
-        this.log('Your browser not support MSE');
-      }
-      this.clearUp();
-      this.videoElement = document.createElement('video');
-      this.videoElement.setAttribute('controls', true);
-      this.mediaSource = new MediaSource();
-      this.mediaSource.addEventListener('sourceopen', function () {
-        _this.mediaSource.duration = _this.totalDuration;
-        _this.log('Creating sourceBuffer');
-        _this.createSourceBuffer();
-      });
-
-      this.videoElement.src = window.URL.createObjectURL(this.mediaSource);
-      this.playerBox.appendChild(this.videoElement);
-      // this.watchVideoOperation();
-
-      this.transmuxer = new _mp2.default.Transmuxer();
-      this.createdInitSegment = false;
-      this.remuxedSegments = [];
-      this.remuxedInitSegment = null;
+        this.playerBox = document.getElementById(id);
+        this.mime = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
     }
 
-    // watchVideoOperation() {
-    // 	this.videoElement.addEventListener('seeking',(e) => {
-    // 		console.log(e);
-    // 		let timeStamp = e.timeStamp/1000;
-    //
-    // })
-    // }
-
-  }, {
-    key: 'createSourceBuffer',
-    value: function createSourceBuffer() {
-      var _this2 = this;
-
-      window.URL.revokeObjectURL(this.videoElement.src);
-      this.log('create sourcebuffer');
-      this.sourceBuffer = this.mediaSource.addSourceBuffer(this.mime);
-      this.sourceBuffer.addEventListener('updateend', function () {
-        _this2.log('Ready');
-        _this2.updateEnd();
-      });
-
-      this.getRemuxedSegments();
-      this.index = 0;
-      this.fetchSegment(this.index);
-    }
-  }, {
-    key: 'getRemuxedSegments',
-    value: function getRemuxedSegments() {
-      var _this3 = this;
-
-      this.remuxedIndex = -1;
-      this.transmuxer.on('data', function (segment) {
-        console.log('get transmuxer segment', _this3.remuxedIndex, segment);
-        _this3.remuxedSegments.push(segment);
-        if (!_this3.remuxedInitSegment) {
-          _this3.remuxedInitSegment = segment.initSegment;
+    _createClass(Player, [{
+        key: 'fetchM3U8',
+        value: function fetchM3U8(sourceFile) {
+            var self = this;
+            this.sourceFile = (0, _resolveUrl.getAbsoluteUrl)(sourceFile);
+            console.log('sourceFile', this.sourceFile);
+            this.parser = new _m3u8Parser2.default.Parser();
+            fetch(this.sourceFile, {}).then(function (response) {
+                return response.text();
+            }).then(function (data) {
+                self.parseM3U8(data);
+            });
         }
-        _this3.appendBuffer();
-      });
-    }
-  }, {
-    key: 'updateEnd',
-    value: function updateEnd() {
-      if (!this.sourceBuffer.updating && this.mediaSource.readyState === 'open' && this.index == this.playManifest.segments.length - 1) {
-        this.mediaSource.endOfStream();
-        // this.videoElement.play();
-        return;
-      }
-      this.index++;
-      this.fetchSegment(this.index);
-    }
-  }, {
-    key: 'appendBuffer',
-    value: function appendBuffer() {
-      this.remuxedIndex++;
-      var bytes = null,
-          offset = 0;
+    }, {
+        key: 'parseM3U8',
+        value: function parseM3U8(data) {
+            var _this = this;
 
-      if (!this.createdInitSegment) {
-        bytes = new Uint8Array(this.remuxedInitSegment.byteLength + this.remuxedSegments[this.remuxedIndex].data.byteLength);
-        bytes.set(this.remuxedInitSegment, offset);
-        offset += this.remuxedInitSegment.byteLength;
-        var segmentOffset = offset;
-        bytes.set(this.remuxedSegments[this.remuxedIndex].data, segmentOffset);
-        this.sourceBuffer.appendBuffer(bytes);
-        this.createdInitSegment = true;
-      } else {
-        this.sourceBuffer.appendBuffer(this.remuxedSegments[this.remuxedIndex].data);
-      }
-    }
-  }, {
-    key: 'parseM3U8',
-    value: function parseM3U8(data) {
-      var _this4 = this;
+            this.parser.push(data);
+            this.parser.end();
+            this.playManifest = this.parser.manifest;
+            this.totalDuration = 0;
+            this.playManifest.segments.forEach(function (segment, index) {
+                segment.uri = (0, _resolveUrl.resolveUrl)(_this.sourceFile, segment.uri);
+                var segmentInstance = new _Segment2.default(index, segment.uri, true, _this.totalDuration, _this.totalDuration + segment.duration, segment.timeline);
+                _this.totalDuration += segment.duration;
+                if (!_this.segments) {
+                    _this.segments = [];
+                }
+                _this.segments.push(segmentInstance);
+            });
+            this.log('Get manifest');
+            console.log(this.playManifest);
+            this.initPlay();
+        }
+    }, {
+        key: 'bindEvent',
+        value: function bindEvent() {
+            var _this2 = this;
 
-      this.parser.push(data);
-      this.parser.end();
-      this.playManifest = this.parser.manifest;
-      this.totalDuration = 0;
-      this.playManifest.segments.forEach(function (segment) {
-        _this4.totalDuration += segment.duration;
-      });
-      this.log('Get manifest');
-      console.log(this.playManifest);
-      this.initPlay();
-    }
-  }, {
-    key: 'fetchM3U8',
-    value: function fetchM3U8(sourceFile) {
-      var self = this;
-      this.sourceFile = sourceFile;
-      this.parser = new _m3u8Parser2.default.Parser();
-      fetch(this.sourceFile, {}).then(function (response) {
-        return response.text();
-      }).then(function (data) {
-        self.parseM3U8(data);
-      });
-    }
-  }, {
-    key: 'fetchSegment',
-    value: function fetchSegment(index) {
-      var self = this;
-      var videoUrl = '../assets/' + this.playManifest.segments[index]['uri'];
-      self.log('get ' + self.playManifest.segments[index]['uri']);
-      fetch(videoUrl, {}).then(function (response) {
-        return response.arrayBuffer();
-      }).then(function (arrayBuffer) {
-        self.transmuxer.push(new Uint8Array(arrayBuffer));
-        self.transmuxer.flush();
-      });
-    }
-  }, {
-    key: 'log',
-    value: function log(text) {
-      if (!this.logBox) {
-        this.logBox = document.createElement('div');
-        this.playerBox.appendChild(this.logBox);
-      }
-      this.logBox.innerHTML = text;
-    }
-  }, {
-    key: 'clearUp',
-    value: function clearUp() {
-      if (this.videoElement) {
-        this.videoElement.remove();
-        delete this.mediaSource;
-        delete this.sourceBuffer;
-        delete this.parser;
-        delete this.transmuxer;
-      }
-    }
-  }]);
+            _eventBus2.default.on('remuxed', function (segment) {
+                console.log('remuxed', segment);
+                _this2.bufferQueue.push(segment);
+                if (!_this2.sourceBuffer.updating && _this2.mediaSource.readyState === 'open') {
+                    _this2.flushBufferQueue();
+                }
+            });
+        }
+    }, {
+        key: 'initPlay',
+        value: function initPlay() {
+            var _this3 = this;
 
-  return Player;
+            if (!_window2.default.MediaSource) {
+                this.log('Your browser not support MSE');
+            }
+            this.clearUp();
+            this.bindEvent();
+            this.videoElement = document.createElement('video');
+            this.videoElement.setAttribute('controls', true);
+            this.mediaSource = new MediaSource();
+            this.mediaSource.addEventListener('sourceopen', function () {
+                _this3.mediaSource.duration = _this3.totalDuration;
+                _this3.log('Creating sourceBuffer');
+                _this3.createSourceBuffer();
+            });
+
+            this.videoElement.src = _window2.default.URL.createObjectURL(this.mediaSource);
+            this.playerBox.appendChild(this.videoElement);
+            this.bufferQueue = [];
+            this.updatingSegment = null;
+        }
+    }, {
+        key: 'watchVideoOperation',
+        value: function watchVideoOperation() {
+            var _this4 = this;
+
+            this.videoElement.addEventListener('seeking', function (e) {
+                console.log('seeking');
+            });
+            this.videoElement.addEventListener('timeupdate', function (e) {
+                _this4.downloadUpcomingSegment();
+            });
+        }
+    }, {
+        key: 'createSourceBuffer',
+        value: function createSourceBuffer() {
+            var _this5 = this;
+
+            _window2.default.URL.revokeObjectURL(this.videoElement.src);
+            this.log('create sourcebuffer');
+            this.sourceBuffer = this.mediaSource.addSourceBuffer(this.mime);
+            this.sourceBuffer.addEventListener('updateend', function () {
+                _this5.log('Ready');
+                // this.updateEnd();
+                _this5.flushBufferQueue();
+            });
+            this.watchVideoOperation();
+            this.downloadInitSegment();
+        }
+    }, {
+        key: 'downloadInitSegment',
+        value: function downloadInitSegment() {
+            console.log('download init');
+            this.segments[0].isInitSegment = true;
+            this.segments[0].download();
+        }
+    }, {
+        key: 'downloadUpcomingSegment',
+        value: function downloadUpcomingSegment() {
+            var _this6 = this;
+
+            var nextSegments = this.segments.filter(function (segment) {
+                return !segment.requested && segment.timeStart <= _this6.videoElement.currentTime + 5 && segment.timeEnd > _this6.videoElement.currentTime;
+            });
+            if (nextSegments.length) {
+                nextSegments.forEach(function (segment) {
+                    segment.download();
+                });
+            } else {
+                if (this.segments.filter(function (segment) {
+                    return !segment.requested;
+                }).length === 0) {
+                    this.log("Finished buffering whole video");
+                } else {
+                    this.log("Finished buffering ahead");
+                }
+            }
+        }
+    }, {
+        key: 'concatBuffer',
+        value: function concatBuffer() {
+            var bytesLength = 0,
+                offset = 0;
+            this.bufferQueue.forEach(function (segment) {
+                segment.buffered = true;
+                bytesLength += segment.bufferData.length;
+            });
+            var resultsBuffer = new Uint8Array(bytesLength);
+            this.bufferQueue.forEach(function (segment) {
+                bytesLength += segment.bufferData.length;
+                resultsBuffer.set(segment.bufferData, offset);
+                offset += segment.bufferData.length;
+            });
+            return resultsBuffer;
+        }
+    }, {
+        key: 'flushBufferQueue',
+        value: function flushBufferQueue() {
+            if (this.sourceBuffer.updating || !this.bufferQueue.length) {
+                this.checkEnd();
+                return;
+            }
+            var bufferData = this.concatBuffer();
+            //!使用单独transmuxer的时候segment上的时间戳信息会丢失？看一下mux的源码，查找原因。
+            this.timestampOffset = this.bufferQueue[0].timeStart;
+            this.bufferQueue = [];
+            this.appendBuffer(bufferData);
+        }
+    }, {
+        key: 'checkEnd',
+        value: function checkEnd() {
+            var unBuffered = this.segments.filter(function (segment) {
+                return !segment.buffered;
+            });
+            if (!unBuffered.length) {
+                this.mediaSource.endOfStream();
+                this.log('MediaSource End');
+            }
+        }
+    }, {
+        key: 'updateEnd',
+        value: function updateEnd() {
+            if (!this.sourceBuffer.updating && this.mediaSource.readyState === 'open' && this.index == this.playManifest.segments.length - 1) {
+                // this.videoElement.play();
+                return;
+            }
+        }
+    }, {
+        key: 'appendBuffer',
+        value: function appendBuffer(data) {
+            console.log('apendding');
+
+            this.sourceBuffer.timestampOffset = this.timestampOffset;
+            this.sourceBuffer.appendBuffer(data);
+        }
+    }, {
+        key: 'log',
+        value: function log(text) {
+            if (!this.logBox) {
+                this.logBox = document.createElement('div');
+                this.playerBox.appendChild(this.logBox);
+            }
+            this.logBox.innerHTML = text;
+        }
+    }, {
+        key: 'clearUp',
+        value: function clearUp() {
+            if (this.videoElement) {
+                this.videoElement.remove();
+                delete this.mediaSource;
+                delete this.sourceBuffer;
+                delete this.bufferQueue;
+            }
+        }
+    }]);
+
+    return Player;
 }();
 
 exports.default = Player;
-},{"m3u8-parser":3,"mux.js/lib/mp4":13}],2:[function(require,module,exports){
+},{"./Segment":2,"./utils/event-bus":4,"./utils/resolve-url":6,"global/window":10,"m3u8-parser":8}],2:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+    value: true
+});
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+var _mp = require('mux.js/lib/mp4');
+
+var _mp2 = _interopRequireDefault(_mp);
+
+var _eventBus = require('./utils/event-bus');
+
+var _eventBus2 = _interopRequireDefault(_eventBus);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var Segment = function () {
+    function Segment(index, url, isInitSegment, timeStart, timeEnd, timeline) {
+        _classCallCheck(this, Segment);
+
+        //[timeStart, timeEnd)
+        this.index = index;
+        this.url = url;
+        this.isInitSegment = isInitSegment;
+        this.timeStart = timeStart;
+        this.timeEnd = timeEnd;
+        this.timeline = timeline;
+        this.remuxedSegment = null;
+        this.bufferData = null;
+
+        this.abort = false;
+        this.requested = false; //是否已经请求过了
+        this.remuxed = false; //是否已经转封装过了
+        this.buffered = false; //是否已经加入buffer了
+    }
+
+    _createClass(Segment, [{
+        key: 'initTransmuxer',
+        value: function initTransmuxer(callback) {
+            var _this = this;
+
+            this.transmuxer = new _mp2.default.Transmuxer();
+            this.transmuxer.on('data', function (segment) {
+                _this.getRemuxedData(segment);
+            });
+        }
+    }, {
+        key: 'getRemuxedData',
+        value: function getRemuxedData(segment) {
+            this.remuxedSegment = segment;
+            if (this.isInitSegment) {
+                var initSegment = segment.initSegment;
+                var bytes = null,
+                    offset = initSegment.byteLength;
+                bytes = new Uint8Array(initSegment.byteLength + segment.data.byteLength);
+                bytes.set(initSegment, 0);
+                bytes.set(segment.data, offset);
+                this.bufferData = bytes;
+            } else {
+                this.bufferData = segment.data;
+            }
+            // console.log(this.bufferData);
+            // console.log(this.bufferData.length);
+            this.remuxed = true;
+            _eventBus2.default.emit('remuxed', this);
+        }
+    }, {
+        key: 'download',
+        value: function download(callback) {
+            this.requested = true;
+            this.initTransmuxer(callback);
+            var self = this;
+            fetch(this.url, {}).then(function (response) {
+                return response.arrayBuffer();
+            }).then(function (arrayBuffer) {
+                console.log('get' + self.url);
+                self.transmuxer.push(new Uint8Array(arrayBuffer));
+                self.transmuxer.flush();
+            });
+        }
+    }]);
+
+    return Segment;
+}();
+
+exports.default = Segment;
+},{"./utils/event-bus":4,"mux.js/lib/mp4":20}],3:[function(require,module,exports){
 'use strict';
 
 var _Player = require('./Player.js');
@@ -221,7 +361,322 @@ var button = document.getElementById('button');
 button.addEventListener('click', function () {
 	myPlayer.fetchM3U8('../assets/cg.m3u8');
 });
-},{"./Player.js":1}],3:[function(require,module,exports){
+},{"./Player.js":1}],4:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+    value: true
+});
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }(); //管理自定义事件
+
+
+var _guid = require('./guid');
+
+var _guid2 = _interopRequireDefault(_guid);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var EventBusClass = function () {
+    function EventBusClass() {
+        _classCallCheck(this, EventBusClass);
+
+        this.data = {};
+    }
+
+    _createClass(EventBusClass, [{
+        key: 'on',
+        value: function on(type, fn) {
+            var data = this.data;
+            if (!data.handlers) {
+                data.handlers = {};
+            }
+            if (!data.handlers[type]) {
+                data.handlers[type] = [];
+            }
+            if (!fn.guid) {
+                fn.guid = (0, _guid2.default)();
+            }
+            data.handlers[type].push(fn);
+        }
+    }, {
+        key: 'emit',
+        value: function emit(type, params) {
+            var data = this.data;
+            var handlers = data.handlers[type];
+            if (handlers) {
+                handlers.forEach(function (handler) {
+                    handler(params);
+                });
+            }
+        }
+    }, {
+        key: 'removeType',
+        value: function removeType(type) {
+            this.data.handlers[type] = [];
+        }
+    }, {
+        key: 'removeEvent',
+        value: function removeEvent(type, fn) {
+            var data = this.data;
+            if (!type) {
+                for (var t in data.handlers) {
+                    this.removeType(t);
+                }
+            }
+            var handlers = data.handlers[type];
+            if (!handlers) return;
+            if (!fn) {
+                this.removeType(type);
+                return;
+            }
+
+            if (fn.guid) {
+                for (var n = 0; n < handlers.length; n++) {
+                    if (handlers[n].guid === fn.guid) {
+                        handlers.splice(n--, 1);
+                    }
+                }
+            }
+        }
+    }]);
+
+    return EventBusClass;
+}();
+
+var EventBus = new EventBusClass();
+exports.default = EventBus;
+},{"./guid":5}],5:[function(require,module,exports){
+"use strict";
+
+Object.defineProperty(exports, "__esModule", {
+    value: true
+});
+exports.default = newGuid;
+var _guid = 1;
+
+function newGuid() {
+    return _guid++;
+}
+},{}],6:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+    value: true
+});
+exports.getAbsoluteUrl = exports.resolveUrl = undefined;
+
+var _urlToolkit = require('url-toolkit');
+
+var _urlToolkit2 = _interopRequireDefault(_urlToolkit);
+
+var _window = require('global/window');
+
+var _window2 = _interopRequireDefault(_window);
+
+var _document = require('global/document');
+
+var _document2 = _interopRequireDefault(_document);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function resolveUrl(baseURL, relativeURL) {
+    // return early if we don't need to resolve
+    if (/^[a-z]+:/i.test(relativeURL)) {
+        return relativeURL;
+    }
+
+    // if the base URL is relative then combine with the current location
+    if (!/\/\//i.test(baseURL)) {
+        baseURL = _urlToolkit2.default.buildAbsoluteURL(_window2.default.location.href, baseURL);
+    }
+
+    return _urlToolkit2.default.buildAbsoluteURL(baseURL, relativeURL);
+} /**
+   * @file resolve-url.js
+   */
+
+function getAbsoluteUrl(url) {
+    if (!url.match(/^https?:\/\//)) {
+        // Convert to absolute URL. Flash hosted off-site needs an absolute URL.
+        var div = _document2.default.createElement('div');
+
+        div.innerHTML = '<a href="' + url + '">x</a>';
+        url = div.firstChild.href;
+    }
+
+    return url;
+}
+exports.resolveUrl = resolveUrl;
+exports.getAbsoluteUrl = getAbsoluteUrl;
+},{"global/document":9,"global/window":10,"url-toolkit":7}],7:[function(require,module,exports){
+// see https://tools.ietf.org/html/rfc1808
+
+/* jshint ignore:start */
+(function(root) { 
+/* jshint ignore:end */
+
+  var URL_REGEX = /^((?:[a-zA-Z0-9+\-.]+:)?)(\/\/[^\/\;?#]*)?(.*?)??(;.*?)?(\?.*?)?(#.*?)?$/;
+  var FIRST_SEGMENT_REGEX = /^([^\/;?#]*)(.*)$/;
+  var SLASH_DOT_REGEX = /(?:\/|^)\.(?=\/)/g;
+  var SLASH_DOT_DOT_REGEX = /(?:\/|^)\.\.\/(?!\.\.\/).*?(?=\/)/g;
+
+  var URLToolkit = { // jshint ignore:line
+    // If opts.alwaysNormalize is true then the path will always be normalized even when it starts with / or //
+    // E.g
+    // With opts.alwaysNormalize = false (default, spec compliant)
+    // http://a.com/b/cd + /e/f/../g => http://a.com/e/f/../g
+    // With opts.alwaysNormalize = true (not spec compliant)
+    // http://a.com/b/cd + /e/f/../g => http://a.com/e/g
+    buildAbsoluteURL: function(baseURL, relativeURL, opts) {
+      opts = opts || {};
+      // remove any remaining space and CRLF
+      baseURL = baseURL.trim();
+      relativeURL = relativeURL.trim();
+      if (!relativeURL) {
+        // 2a) If the embedded URL is entirely empty, it inherits the
+        // entire base URL (i.e., is set equal to the base URL)
+        // and we are done.
+        if (!opts.alwaysNormalize) {
+          return baseURL;
+        }
+        var basePartsForNormalise = URLToolkit.parseURL(baseURL);
+        if (!basePartsForNormalise) {
+          throw new Error('Error trying to parse base URL.');
+        }
+        basePartsForNormalise.path = URLToolkit.normalizePath(basePartsForNormalise.path);
+        return URLToolkit.buildURLFromParts(basePartsForNormalise);
+      }
+      var relativeParts = URLToolkit.parseURL(relativeURL);
+      if (!relativeParts) {
+        throw new Error('Error trying to parse relative URL.');
+      }
+      if (relativeParts.scheme) {
+        // 2b) If the embedded URL starts with a scheme name, it is
+        // interpreted as an absolute URL and we are done.
+        if (!opts.alwaysNormalize) {
+          return relativeURL;
+        }
+        relativeParts.path = URLToolkit.normalizePath(relativeParts.path);
+        return URLToolkit.buildURLFromParts(relativeParts);
+      }
+      var baseParts = URLToolkit.parseURL(baseURL);
+      if (!baseParts) {
+        throw new Error('Error trying to parse base URL.');
+      }
+      if (!baseParts.netLoc && baseParts.path && baseParts.path[0] !== '/') {
+        // If netLoc missing and path doesn't start with '/', assume everthing before the first '/' is the netLoc
+        // This causes 'example.com/a' to be handled as '//example.com/a' instead of '/example.com/a'
+        var pathParts = FIRST_SEGMENT_REGEX.exec(baseParts.path);
+        baseParts.netLoc = pathParts[1];
+        baseParts.path = pathParts[2];
+      }
+      if (baseParts.netLoc && !baseParts.path) {
+        baseParts.path = '/';
+      }
+      var builtParts = {
+        // 2c) Otherwise, the embedded URL inherits the scheme of
+        // the base URL.
+        scheme: baseParts.scheme,
+        netLoc: relativeParts.netLoc,
+        path: null,
+        params: relativeParts.params,
+        query: relativeParts.query,
+        fragment: relativeParts.fragment
+      };
+      if (!relativeParts.netLoc) {
+        // 3) If the embedded URL's <net_loc> is non-empty, we skip to
+        // Step 7.  Otherwise, the embedded URL inherits the <net_loc>
+        // (if any) of the base URL.
+        builtParts.netLoc = baseParts.netLoc;
+        // 4) If the embedded URL path is preceded by a slash "/", the
+        // path is not relative and we skip to Step 7.
+        if (relativeParts.path[0] !== '/') {
+          if (!relativeParts.path) {
+            // 5) If the embedded URL path is empty (and not preceded by a
+            // slash), then the embedded URL inherits the base URL path
+            builtParts.path = baseParts.path;
+            // 5a) if the embedded URL's <params> is non-empty, we skip to
+            // step 7; otherwise, it inherits the <params> of the base
+            // URL (if any) and
+            if (!relativeParts.params) {
+              builtParts.params = baseParts.params;
+              // 5b) if the embedded URL's <query> is non-empty, we skip to
+              // step 7; otherwise, it inherits the <query> of the base
+              // URL (if any) and we skip to step 7.
+              if (!relativeParts.query) {
+                builtParts.query = baseParts.query;
+              }
+            }
+          } else {
+            // 6) The last segment of the base URL's path (anything
+            // following the rightmost slash "/", or the entire path if no
+            // slash is present) is removed and the embedded URL's path is
+            // appended in its place.
+            var baseURLPath = baseParts.path;
+            var newPath = baseURLPath.substring(0, baseURLPath.lastIndexOf('/') + 1) + relativeParts.path;
+            builtParts.path = URLToolkit.normalizePath(newPath);
+          }
+        }
+      }
+      if (builtParts.path === null) {
+        builtParts.path = opts.alwaysNormalize ? URLToolkit.normalizePath(relativeParts.path) : relativeParts.path;
+      }
+      return URLToolkit.buildURLFromParts(builtParts);
+    },
+    parseURL: function(url) {
+      var parts = URL_REGEX.exec(url);
+      if (!parts) {
+        return null;
+      }
+      return {
+        scheme: parts[1] || '',
+        netLoc: parts[2] || '',
+        path: parts[3] || '',
+        params: parts[4] || '',
+        query: parts[5] || '',
+        fragment: parts[6] || ''
+      };
+    },
+    normalizePath: function(path) {
+      // The following operations are
+      // then applied, in order, to the new path:
+      // 6a) All occurrences of "./", where "." is a complete path
+      // segment, are removed.
+      // 6b) If the path ends with "." as a complete path segment,
+      // that "." is removed.
+      path = path.split('').reverse().join('').replace(SLASH_DOT_REGEX, '');
+      // 6c) All occurrences of "<segment>/../", where <segment> is a
+      // complete path segment not equal to "..", are removed.
+      // Removal of these path segments is performed iteratively,
+      // removing the leftmost matching pattern on each iteration,
+      // until no matching pattern remains.
+      // 6d) If the path ends with "<segment>/..", where <segment> is a
+      // complete path segment not equal to "..", that
+      // "<segment>/.." is removed.
+      while (path.length !== (path = path.replace(SLASH_DOT_DOT_REGEX, '')).length) {} // jshint ignore:line
+      return path.split('').reverse().join('');
+    },
+    buildURLFromParts: function(parts) {
+      return parts.scheme + parts.netLoc + parts.path + parts.params + parts.query + parts.fragment;
+    }
+  };
+
+/* jshint ignore:start */
+  if(typeof exports === 'object' && typeof module === 'object')
+    module.exports = URLToolkit;
+  else if(typeof define === 'function' && define.amd)
+    define([], function() { return URLToolkit; });
+  else if(typeof exports === 'object')
+    exports["URLToolkit"] = URLToolkit;
+  else
+    root["URLToolkit"] = URLToolkit;
+})(this);
+/* jshint ignore:end */
+
+},{}],8:[function(require,module,exports){
 'use strict';
 
 var classCallCheck = function (instance, Constructor) {
@@ -1351,7 +1806,45 @@ exports.LineStream = LineStream;
 exports.ParseStream = ParseStream;
 exports.Parser = Parser;
 
-},{}],4:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
+(function (global){
+var topLevel = typeof global !== 'undefined' ? global :
+    typeof window !== 'undefined' ? window : {}
+var minDoc = require('min-document');
+
+var doccy;
+
+if (typeof document !== 'undefined') {
+    doccy = document;
+} else {
+    doccy = topLevel['__GLOBAL_DOCUMENT_CACHE@4'];
+
+    if (!doccy) {
+        doccy = topLevel['__GLOBAL_DOCUMENT_CACHE@4'] = minDoc;
+    }
+}
+
+module.exports = doccy;
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{"min-document":26}],10:[function(require,module,exports){
+(function (global){
+var win;
+
+if (typeof window !== "undefined") {
+    win = window;
+} else if (typeof global !== "undefined") {
+    win = global;
+} else if (typeof self !== "undefined"){
+    win = self;
+} else {
+    win = {};
+}
+
+module.exports = win;
+
+}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
+},{}],11:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -1496,7 +1989,7 @@ AacStream.prototype = new Stream();
 
 module.exports = AacStream;
 
-},{"../utils/stream.js":18}],5:[function(require,module,exports){
+},{"../utils/stream.js":25}],12:[function(require,module,exports){
 'use strict';
 
 var Stream = require('../utils/stream.js');
@@ -1630,7 +2123,7 @@ AdtsStream.prototype = new Stream();
 
 module.exports = AdtsStream;
 
-},{"../utils/stream.js":18}],6:[function(require,module,exports){
+},{"../utils/stream.js":25}],13:[function(require,module,exports){
 'use strict';
 
 var Stream = require('../utils/stream.js');
@@ -2050,7 +2543,7 @@ module.exports = {
   NalByteStream: NalByteStream
 };
 
-},{"../utils/exp-golomb.js":17,"../utils/stream.js":18}],7:[function(require,module,exports){
+},{"../utils/exp-golomb.js":24,"../utils/stream.js":25}],14:[function(require,module,exports){
 var highPrefix = [33, 16, 5, 32, 164, 27];
 var lowPrefix = [33, 65, 108, 84, 1, 2, 4, 8, 168, 2, 4, 8, 17, 191, 252];
 var zeroFill = function(count) {
@@ -2087,7 +2580,7 @@ var coneOfSilence = {
 
 module.exports = makeTable(coneOfSilence);
 
-},{}],8:[function(require,module,exports){
+},{}],15:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -2954,7 +3447,7 @@ module.exports = {
   Cea608Stream: Cea608Stream
 };
 
-},{"../utils/stream":18}],9:[function(require,module,exports){
+},{"../utils/stream":25}],16:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -3462,7 +3955,7 @@ for (var type in StreamTypes) {
 
 module.exports = m2ts;
 
-},{"../utils/stream.js":18,"./caption-stream":8,"./metadata-stream":10,"./stream-types":11,"./stream-types.js":11,"./timestamp-rollover-stream":12}],10:[function(require,module,exports){
+},{"../utils/stream.js":25,"./caption-stream":15,"./metadata-stream":17,"./stream-types":18,"./stream-types.js":18,"./timestamp-rollover-stream":19}],17:[function(require,module,exports){
 /**
  * Accepts program elementary stream (PES) data events and parses out
  * ID3 metadata from them, if present.
@@ -3712,7 +4205,7 @@ MetadataStream.prototype = new Stream();
 
 module.exports = MetadataStream;
 
-},{"../utils/stream":18,"./stream-types":11}],11:[function(require,module,exports){
+},{"../utils/stream":25,"./stream-types":18}],18:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -3721,7 +4214,7 @@ module.exports = {
   METADATA_STREAM_TYPE: 0x15
 };
 
-},{}],12:[function(require,module,exports){
+},{}],19:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -3807,7 +4300,7 @@ module.exports = {
   handleRollover: handleRollover
 };
 
-},{"../utils/stream":18}],13:[function(require,module,exports){
+},{"../utils/stream":25}],20:[function(require,module,exports){
 module.exports = {
   generator: require('./mp4-generator'),
   Transmuxer: require('./transmuxer').Transmuxer,
@@ -3815,7 +4308,7 @@ module.exports = {
   VideoSegmentStream: require('./transmuxer').VideoSegmentStream
 };
 
-},{"./mp4-generator":14,"./transmuxer":15}],14:[function(require,module,exports){
+},{"./mp4-generator":21,"./transmuxer":22}],21:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -4587,7 +5080,7 @@ module.exports = {
   }
 };
 
-},{}],15:[function(require,module,exports){
+},{}],22:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -6059,7 +6552,7 @@ module.exports = {
   VIDEO_PROPERTIES: VIDEO_PROPERTIES
 };
 
-},{"../aac":4,"../codecs/adts.js":5,"../codecs/h264":6,"../data/silence":7,"../m2ts/m2ts.js":9,"../utils/clock":16,"../utils/stream.js":18,"./mp4-generator.js":14}],16:[function(require,module,exports){
+},{"../aac":11,"../codecs/adts.js":12,"../codecs/h264":13,"../data/silence":14,"../m2ts/m2ts.js":16,"../utils/clock":23,"../utils/stream.js":25,"./mp4-generator.js":21}],23:[function(require,module,exports){
 var
   ONE_SECOND_IN_TS = 90000, // 90kHz clock
   secondsToVideoTs,
@@ -6102,7 +6595,7 @@ module.exports = {
   videoTsToAudioTs: videoTsToAudioTs
 };
 
-},{}],17:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 'use strict';
 
 var ExpGolomb;
@@ -6251,7 +6744,7 @@ ExpGolomb = function(workingData) {
 
 module.exports = ExpGolomb;
 
-},{}],18:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -6370,4 +6863,6 @@ Stream.prototype.flush = function(flushSource) {
 
 module.exports = Stream;
 
-},{}]},{},[2]);
+},{}],26:[function(require,module,exports){
+
+},{}]},{},[3]);

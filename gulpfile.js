@@ -9,7 +9,7 @@ const source = require('vinyl-source-stream');
 
 // 编译并压缩js
 gulp.task('convertJS', function(){
-    return gulp.src('src/*.js')
+    return gulp.src('src/**/*.js')
         .pipe(babel({
             presets: ['es2015']
         }))
@@ -46,3 +46,4 @@ gulp.task("browserify", function () {
 });
 
 gulp.task('start', ['convertJS', 'browserify', 'watch']);
+gulp.task('build', ['convertJS', 'browserify']);
