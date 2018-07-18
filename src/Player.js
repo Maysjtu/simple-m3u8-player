@@ -90,7 +90,6 @@ export default class Player {
         this.sourceBuffer = this.mediaSource.addSourceBuffer(this.mime);
         this.sourceBuffer.addEventListener('updateend', () => {
             this.log('Ready');
-            // this.updateEnd();
             this.flushBufferQueue();
         });
         this.watchVideoOperation();
@@ -98,7 +97,7 @@ export default class Player {
     }
 
     downloadInitSegment() {
-        console.log('download init');
+        this.log('download init');
         this.segments[0].isInitSegment = true;
         this.segments[0].download();
     }
@@ -160,16 +159,8 @@ export default class Player {
         }
     }
 
-    updateEnd() {
-        if (!this.sourceBuffer.updating && this.mediaSource.readyState === 'open'
-            && this.index == this.playManifest.segments.length - 1) {
-            // this.videoElement.play();
-            return;
-        }
-    }
-
     appendBuffer(data) {
-        console.log('apendding');
+        this.log('appending buffer');
 
         this.sourceBuffer.timestampOffset = this.timestampOffset;
         this.sourceBuffer.appendBuffer(data);
