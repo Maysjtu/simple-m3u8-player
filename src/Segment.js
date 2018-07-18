@@ -11,6 +11,7 @@ export default class Segment {
         this.timeline = timeline;
         this.remuxedSegment = null;
         this.bufferData = null;
+        // this.baseMediaDecodeTime = timeStart;
 
         this.abort = false;
         this.requested = false; //是否已经请求过了
@@ -18,10 +19,14 @@ export default class Segment {
         this.buffered = false; //是否已经加入buffer了
     }
 
-    initTransmuxer(callback) {
-        this.transmuxer = new mp4.Transmuxer();
+    initTransmuxer() {
+        console.log('basetime', this.baseMediaDecodeTime);
+        this.transmuxer = new mp4.Transmuxer({
+            // baseMediaDecodeTime: this.baseMediaDecodeTime*1000
+        });
         this.transmuxer.on('data', (segment) => {
             this.getRemuxedData(segment);
+            delete this.transmuxer;
         });
     }
 
@@ -43,9 +48,10 @@ export default class Segment {
         EventBus.emit('remuxed', this);
     }
 
-    download(callback) {
+    download() {
+        if(this.requested) { return; }
         this.requested = true;
-        this.initTransmuxer(callback);
+        this.initTransmuxer();
         let self = this;
         fetch(this.url, {})
             .then(function(response){

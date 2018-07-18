@@ -1,10 +1,10 @@
-
 import m3u8Parser from 'm3u8-parser'
 import {resolveUrl} from './utils/resolve-url'
 import {getAbsoluteUrl} from './utils/resolve-url'
 import window from 'global/window'
 import Segment from "./Segment";
 import EventBus from './utils/event-bus'
+import PlayList from './PlayList'
 
 export default class Player {
     constructor(id) {
@@ -12,36 +12,14 @@ export default class Player {
         this.mime = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
     }
 
-    fetchM3U8(sourceFile) {
-        let self = this;
-        this.sourceFile = getAbsoluteUrl(sourceFile);
-        console.log('sourceFile', this.sourceFile);
-        this.parser = new m3u8Parser.Parser();
-        fetch(this.sourceFile, {})
-            .then(function (response) {
-                return response.text();
-            }).then(function (data) {
-            self.parseM3U8(data);
-        });
-    }
-
-    parseM3U8(data) {
-        this.parser.push(data);
-        this.parser.end();
-        this.playManifest = this.parser.manifest;
-        this.totalDuration = 0;
-        this.playManifest.segments.forEach((segment, index) => {
-            segment.uri = resolveUrl(this.sourceFile, segment.uri);
-            let segmentInstance = new Segment(index, segment.uri, true, this.totalDuration, this.totalDuration + segment.duration, segment.timeline);
-            this.totalDuration += segment.duration;
-            if (!this.segments) {
-                this.segments = [];
-            }
-            this.segments.push(segmentInstance);
-        });
-        this.log('Get manifest');
-        console.log(this.playManifest);
-        this.initPlay();
+    loadSource(options) {
+        this.clearUp();
+        this.bindEvent();
+        this.ready1 = false;
+        this.ready2 = false;
+        this.rendition = 0;
+        this.playList0 = new PlayList(options.rendition0, 0);
+        this.playList1 = new PlayList(options.rendition1, 1);
     }
 
     bindEvent() {
@@ -52,19 +30,40 @@ export default class Player {
                 this.flushBufferQueue();
             }
         });
+        EventBus.on('getManifest', (signal) => {
+            if (signal == 0) {
+                this.ready1 = true;
+            }
+            if (signal == 1) {
+                this.ready2 = true;
+            }
+            if (this.ready1 && this.ready2) {
+                this.totalDuration = this.playList1.totalDuration;
+                this.initPlay();
+            }
+
+        });
+    }
+
+    changeRendition() {
+        this.rendition = !this.rendition;
+        if (this.rendition) {
+            this.segments = this.playList1.segments;
+        } else {
+            this.segments = this.playList0.segments;
+        }
     }
 
     initPlay() {
         if (!window.MediaSource) {
             this.log('Your browser not support MSE');
         }
-        this.clearUp();
-        this.bindEvent();
         this.videoElement = document.createElement('video');
         this.videoElement.setAttribute('controls', true);
         this.mediaSource = new MediaSource();
         this.mediaSource.addEventListener('sourceopen', () => {
-            this.mediaSource.duration = this.totalDuration;
+            console.log(this.mediaSource);
+            this.mediaSource.duration = this.totalDuration || 0;
             this.log('Creating sourceBuffer');
             this.createSourceBuffer();
         });
@@ -98,7 +97,7 @@ export default class Player {
 
     downloadInitSegment() {
         this.log('download init');
-        this.segments[0].isInitSegment = true;
+        this.segments = this.playList0.segments;
         this.segments[0].download();
     }
 
@@ -139,7 +138,7 @@ export default class Player {
 
     flushBufferQueue() {
         if (this.sourceBuffer.updating || !this.bufferQueue.length) {
-            this.checkEnd();
+            // this.checkEnd();
             return;
         }
         let bufferData = this.concatBuffer();
@@ -153,7 +152,7 @@ export default class Player {
         let unBuffered = this.segments.filter((segment) => {
             return !segment.buffered;
         });
-        if(!unBuffered.length) {
+        if (!unBuffered.length) {
             this.mediaSource.endOfStream();
             this.log('MediaSource End');
         }
@@ -171,15 +170,23 @@ export default class Player {
             this.logBox = document.createElement('div');
             this.playerBox.appendChild(this.logBox);
         }
-        this.logBox.innerHTML = text;
+        let rendition = this.rendition ? 'Low' : 'High';
+        this.logBox.innerHTML =
+            `Rendition: ${rendition} <br>  
+             Information: ${text} `;
     }
 
     clearUp() {
         if (this.videoElement) {
             this.videoElement.remove();
+        }
+        try {
+            EventBus.removeEvent();
             delete this.mediaSource;
             delete this.sourceBuffer;
             delete this.bufferQueue;
+        } catch (e) {
+
         }
     }
 }

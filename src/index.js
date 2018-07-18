@@ -1,16 +1,16 @@
-/*
-* @Author: Mayde
-* @Email:  maysjtu@163.com
-* @Date:   2018-07-11 19:39:27
-* @Last Modified by:   Mayde
-* @Last Modified time: 2018-07-11 19:44:30
-*/
-
 import Player from './Player.js'
 
 let myPlayer = new Player('player-box');
 let button = document.getElementById('button');
+let changeBtn = document.getElementById('change');
 
 button.addEventListener('click',function() {
-	myPlayer.fetchM3U8('../docs/assets/cg.m3u8');
+	myPlayer.loadSource({
+		rendition0: '../docs/assets/cg.m3u8',
+		rendition1: '../docs/assets/cg_160.m3u8'
+	});
+});
+
+changeBtn.addEventListener('click',function() {
+    myPlayer.changeRendition();
 });

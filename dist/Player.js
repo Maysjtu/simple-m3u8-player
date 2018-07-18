@@ -24,6 +24,10 @@ var _eventBus = require('./utils/event-bus');
 
 var _eventBus2 = _interopRequireDefault(_eventBus);
 
+var _PlayList = require('./PlayList');
+
+var _PlayList2 = _interopRequireDefault(_PlayList);
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -37,70 +41,67 @@ var Player = function () {
     }
 
     _createClass(Player, [{
-        key: 'fetchM3U8',
-        value: function fetchM3U8(sourceFile) {
-            var self = this;
-            this.sourceFile = (0, _resolveUrl.getAbsoluteUrl)(sourceFile);
-            console.log('sourceFile', this.sourceFile);
-            this.parser = new _m3u8Parser2.default.Parser();
-            fetch(this.sourceFile, {}).then(function (response) {
-                return response.text();
-            }).then(function (data) {
-                self.parseM3U8(data);
-            });
-        }
-    }, {
-        key: 'parseM3U8',
-        value: function parseM3U8(data) {
-            var _this = this;
-
-            this.parser.push(data);
-            this.parser.end();
-            this.playManifest = this.parser.manifest;
-            this.totalDuration = 0;
-            this.playManifest.segments.forEach(function (segment, index) {
-                segment.uri = (0, _resolveUrl.resolveUrl)(_this.sourceFile, segment.uri);
-                var segmentInstance = new _Segment2.default(index, segment.uri, true, _this.totalDuration, _this.totalDuration + segment.duration, segment.timeline);
-                _this.totalDuration += segment.duration;
-                if (!_this.segments) {
-                    _this.segments = [];
-                }
-                _this.segments.push(segmentInstance);
-            });
-            this.log('Get manifest');
-            console.log(this.playManifest);
-            this.initPlay();
+        key: 'loadSource',
+        value: function loadSource(options) {
+            this.clearUp();
+            this.bindEvent();
+            this.ready1 = false;
+            this.ready2 = false;
+            this.rendition = 0;
+            this.playList0 = new _PlayList2.default(options.rendition0, 0);
+            this.playList1 = new _PlayList2.default(options.rendition1, 1);
         }
     }, {
         key: 'bindEvent',
         value: function bindEvent() {
-            var _this2 = this;
+            var _this = this;
 
             _eventBus2.default.on('remuxed', function (segment) {
                 console.log('remuxed', segment);
-                _this2.bufferQueue.push(segment);
-                if (!_this2.sourceBuffer.updating && _this2.mediaSource.readyState === 'open') {
-                    _this2.flushBufferQueue();
+                _this.bufferQueue.push(segment);
+                if (!_this.sourceBuffer.updating && _this.mediaSource.readyState === 'open') {
+                    _this.flushBufferQueue();
+                }
+            });
+            _eventBus2.default.on('getManifest', function (signal) {
+                if (signal == 0) {
+                    _this.ready1 = true;
+                }
+                if (signal == 1) {
+                    _this.ready2 = true;
+                }
+                if (_this.ready1 && _this.ready2) {
+                    _this.totalDuration = _this.playList1.totalDuration;
+                    _this.initPlay();
                 }
             });
         }
     }, {
+        key: 'changeRendition',
+        value: function changeRendition() {
+            this.rendition = !this.rendition;
+            if (this.rendition) {
+                this.segments = this.playList1.segments;
+            } else {
+                this.segments = this.playList0.segments;
+            }
+        }
+    }, {
         key: 'initPlay',
         value: function initPlay() {
-            var _this3 = this;
+            var _this2 = this;
 
             if (!_window2.default.MediaSource) {
                 this.log('Your browser not support MSE');
             }
-            this.clearUp();
-            this.bindEvent();
             this.videoElement = document.createElement('video');
             this.videoElement.setAttribute('controls', true);
             this.mediaSource = new MediaSource();
             this.mediaSource.addEventListener('sourceopen', function () {
-                _this3.mediaSource.duration = _this3.totalDuration;
-                _this3.log('Creating sourceBuffer');
-                _this3.createSourceBuffer();
+                console.log(_this2.mediaSource);
+                _this2.mediaSource.duration = _this2.totalDuration || 0;
+                _this2.log('Creating sourceBuffer');
+                _this2.createSourceBuffer();
             });
 
             this.videoElement.src = _window2.default.URL.createObjectURL(this.mediaSource);
@@ -111,26 +112,26 @@ var Player = function () {
     }, {
         key: 'watchVideoOperation',
         value: function watchVideoOperation() {
-            var _this4 = this;
+            var _this3 = this;
 
             this.videoElement.addEventListener('seeking', function (e) {
                 console.log('seeking');
             });
             this.videoElement.addEventListener('timeupdate', function (e) {
-                _this4.downloadUpcomingSegment();
+                _this3.downloadUpcomingSegment();
             });
         }
     }, {
         key: 'createSourceBuffer',
         value: function createSourceBuffer() {
-            var _this5 = this;
+            var _this4 = this;
 
             _window2.default.URL.revokeObjectURL(this.videoElement.src);
             this.log('create sourcebuffer');
             this.sourceBuffer = this.mediaSource.addSourceBuffer(this.mime);
             this.sourceBuffer.addEventListener('updateend', function () {
-                _this5.log('Ready');
-                _this5.flushBufferQueue();
+                _this4.log('Ready');
+                _this4.flushBufferQueue();
             });
             this.watchVideoOperation();
             this.downloadInitSegment();
@@ -139,16 +140,16 @@ var Player = function () {
         key: 'downloadInitSegment',
         value: function downloadInitSegment() {
             this.log('download init');
-            this.segments[0].isInitSegment = true;
+            this.segments = this.playList0.segments;
             this.segments[0].download();
         }
     }, {
         key: 'downloadUpcomingSegment',
         value: function downloadUpcomingSegment() {
-            var _this6 = this;
+            var _this5 = this;
 
             var nextSegments = this.segments.filter(function (segment) {
-                return !segment.requested && segment.timeStart <= _this6.videoElement.currentTime + 5 && segment.timeEnd > _this6.videoElement.currentTime;
+                return !segment.requested && segment.timeStart <= _this5.videoElement.currentTime + 5 && segment.timeEnd > _this5.videoElement.currentTime;
             });
             if (nextSegments.length) {
                 nextSegments.forEach(function (segment) {
@@ -185,7 +186,7 @@ var Player = function () {
         key: 'flushBufferQueue',
         value: function flushBufferQueue() {
             if (this.sourceBuffer.updating || !this.bufferQueue.length) {
-                this.checkEnd();
+                // this.checkEnd();
                 return;
             }
             var bufferData = this.concatBuffer();
@@ -220,17 +221,21 @@ var Player = function () {
                 this.logBox = document.createElement('div');
                 this.playerBox.appendChild(this.logBox);
             }
-            this.logBox.innerHTML = text;
+            var rendition = this.rendition ? 'Low' : 'High';
+            this.logBox.innerHTML = 'Rendition: ' + rendition + ' <br>  \n             Information: ' + text + ' ';
         }
     }, {
         key: 'clearUp',
         value: function clearUp() {
             if (this.videoElement) {
                 this.videoElement.remove();
+            }
+            try {
+                _eventBus2.default.removeEvent();
                 delete this.mediaSource;
                 delete this.sourceBuffer;
                 delete this.bufferQueue;
-            }
+            } catch (e) {}
         }
     }]);
 

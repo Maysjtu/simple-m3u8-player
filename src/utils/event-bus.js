@@ -22,6 +22,9 @@ class EventBusClass {
 
     emit(type, params) {
         let data = this.data;
+        if(!data.handlers) {
+            return;
+        }
         let handlers = data.handlers[type];
         if(handlers) {
             handlers.forEach(function(handler){

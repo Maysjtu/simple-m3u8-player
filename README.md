@@ -1,5 +1,5 @@
 # simple-m3u8-player
-A simple m3u8 player with buffer control and adaptive streaming.
+A simple m3u8 player with buffer control and dynamic streaming.
 
 The purpose of creating this library is to learn MSE details and hls playback process.
 

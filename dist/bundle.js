@@ -13,10 +13,6 @@ var _m3u8Parser2 = _interopRequireDefault(_m3u8Parser);
 
 var _resolveUrl = require('./utils/resolve-url');
 
-var _window = require('global/window');
-
-var _window2 = _interopRequireDefault(_window);
-
 var _Segment = require('./Segment');
 
 var _Segment2 = _interopRequireDefault(_Segment);
@@ -29,20 +25,20 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-var Player = function () {
-    function Player(id) {
-        _classCallCheck(this, Player);
+var PlayList = function () {
+    function PlayList(url, signal) {
+        _classCallCheck(this, PlayList);
 
-        this.playerBox = document.getElementById(id);
-        this.mime = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
+        this.fetchM3U8(url);
+        this.signal = signal;
     }
 
-    _createClass(Player, [{
+    _createClass(PlayList, [{
         key: 'fetchM3U8',
         value: function fetchM3U8(sourceFile) {
             var self = this;
+            console.log('sourceFile', sourceFile);
             this.sourceFile = (0, _resolveUrl.getAbsoluteUrl)(sourceFile);
-            console.log('sourceFile', this.sourceFile);
             this.parser = new _m3u8Parser2.default.Parser();
             fetch(this.sourceFile, {}).then(function (response) {
                 return response.text();
@@ -59,49 +55,136 @@ var Player = function () {
             this.parser.end();
             this.playManifest = this.parser.manifest;
             this.totalDuration = 0;
+            var timeline = -1;
             this.playManifest.segments.forEach(function (segment, index) {
+                var isInitSegment = false;
+                if (segment.timeline != timeline) {
+                    isInitSegment = true;
+                    timeline = segment.timeline;
+                }
                 segment.uri = (0, _resolveUrl.resolveUrl)(_this.sourceFile, segment.uri);
-                var segmentInstance = new _Segment2.default(index, segment.uri, true, _this.totalDuration, _this.totalDuration + segment.duration, segment.timeline);
+                var segmentInstance = new _Segment2.default(index, segment.uri, isInitSegment, _this.totalDuration, _this.totalDuration + segment.duration, segment.timeline);
                 _this.totalDuration += segment.duration;
                 if (!_this.segments) {
                     _this.segments = [];
                 }
                 _this.segments.push(segmentInstance);
             });
-            this.log('Get manifest');
-            console.log(this.playManifest);
-            this.initPlay();
+
+            console.log(this.playManifest, this.signal);
+            _eventBus2.default.emit('getManifest', this.signal);
+        }
+    }]);
+
+    return PlayList;
+}();
+
+exports.default = PlayList;
+},{"./Segment":3,"./utils/event-bus":5,"./utils/resolve-url":7,"m3u8-parser":9}],2:[function(require,module,exports){
+'use strict';
+
+Object.defineProperty(exports, "__esModule", {
+    value: true
+});
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+var _m3u8Parser = require('m3u8-parser');
+
+var _m3u8Parser2 = _interopRequireDefault(_m3u8Parser);
+
+var _resolveUrl = require('./utils/resolve-url');
+
+var _window = require('global/window');
+
+var _window2 = _interopRequireDefault(_window);
+
+var _Segment = require('./Segment');
+
+var _Segment2 = _interopRequireDefault(_Segment);
+
+var _eventBus = require('./utils/event-bus');
+
+var _eventBus2 = _interopRequireDefault(_eventBus);
+
+var _PlayList = require('./PlayList');
+
+var _PlayList2 = _interopRequireDefault(_PlayList);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var Player = function () {
+    function Player(id) {
+        _classCallCheck(this, Player);
+
+        this.playerBox = document.getElementById(id);
+        this.mime = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
+    }
+
+    _createClass(Player, [{
+        key: 'loadSource',
+        value: function loadSource(options) {
+            this.clearUp();
+            this.bindEvent();
+            this.ready1 = false;
+            this.ready2 = false;
+            this.rendition = 0;
+            this.playList0 = new _PlayList2.default(options.rendition0, 0);
+            this.playList1 = new _PlayList2.default(options.rendition1, 1);
         }
     }, {
         key: 'bindEvent',
         value: function bindEvent() {
-            var _this2 = this;
+            var _this = this;
 
             _eventBus2.default.on('remuxed', function (segment) {
                 console.log('remuxed', segment);
-                _this2.bufferQueue.push(segment);
-                if (!_this2.sourceBuffer.updating && _this2.mediaSource.readyState === 'open') {
-                    _this2.flushBufferQueue();
+                _this.bufferQueue.push(segment);
+                if (!_this.sourceBuffer.updating && _this.mediaSource.readyState === 'open') {
+                    _this.flushBufferQueue();
+                }
+            });
+            _eventBus2.default.on('getManifest', function (signal) {
+                if (signal == 0) {
+                    _this.ready1 = true;
+                }
+                if (signal == 1) {
+                    _this.ready2 = true;
+                }
+                if (_this.ready1 && _this.ready2) {
+                    _this.totalDuration = _this.playList1.totalDuration;
+                    _this.initPlay();
                 }
             });
         }
     }, {
+        key: 'changeRendition',
+        value: function changeRendition() {
+            this.rendition = !this.rendition;
+            if (this.rendition) {
+                this.segments = this.playList1.segments;
+            } else {
+                this.segments = this.playList0.segments;
+            }
+        }
+    }, {
         key: 'initPlay',
         value: function initPlay() {
-            var _this3 = this;
+            var _this2 = this;
 
             if (!_window2.default.MediaSource) {
                 this.log('Your browser not support MSE');
             }
-            this.clearUp();
-            this.bindEvent();
             this.videoElement = document.createElement('video');
             this.videoElement.setAttribute('controls', true);
             this.mediaSource = new MediaSource();
             this.mediaSource.addEventListener('sourceopen', function () {
-                _this3.mediaSource.duration = _this3.totalDuration;
-                _this3.log('Creating sourceBuffer');
-                _this3.createSourceBuffer();
+                console.log(_this2.mediaSource);
+                _this2.mediaSource.duration = _this2.totalDuration || 0;
+                _this2.log('Creating sourceBuffer');
+                _this2.createSourceBuffer();
             });
 
             this.videoElement.src = _window2.default.URL.createObjectURL(this.mediaSource);
@@ -112,26 +195,26 @@ var Player = function () {
     }, {
         key: 'watchVideoOperation',
         value: function watchVideoOperation() {
-            var _this4 = this;
+            var _this3 = this;
 
             this.videoElement.addEventListener('seeking', function (e) {
                 console.log('seeking');
             });
             this.videoElement.addEventListener('timeupdate', function (e) {
-                _this4.downloadUpcomingSegment();
+                _this3.downloadUpcomingSegment();
             });
         }
     }, {
         key: 'createSourceBuffer',
         value: function createSourceBuffer() {
-            var _this5 = this;
+            var _this4 = this;
 
             _window2.default.URL.revokeObjectURL(this.videoElement.src);
             this.log('create sourcebuffer');
             this.sourceBuffer = this.mediaSource.addSourceBuffer(this.mime);
             this.sourceBuffer.addEventListener('updateend', function () {
-                _this5.log('Ready');
-                _this5.flushBufferQueue();
+                _this4.log('Ready');
+                _this4.flushBufferQueue();
             });
             this.watchVideoOperation();
             this.downloadInitSegment();
@@ -140,16 +223,16 @@ var Player = function () {
         key: 'downloadInitSegment',
         value: function downloadInitSegment() {
             this.log('download init');
-            this.segments[0].isInitSegment = true;
+            this.segments = this.playList0.segments;
             this.segments[0].download();
         }
     }, {
         key: 'downloadUpcomingSegment',
         value: function downloadUpcomingSegment() {
-            var _this6 = this;
+            var _this5 = this;
 
             var nextSegments = this.segments.filter(function (segment) {
-                return !segment.requested && segment.timeStart <= _this6.videoElement.currentTime + 5 && segment.timeEnd > _this6.videoElement.currentTime;
+                return !segment.requested && segment.timeStart <= _this5.videoElement.currentTime + 5 && segment.timeEnd > _this5.videoElement.currentTime;
             });
             if (nextSegments.length) {
                 nextSegments.forEach(function (segment) {
@@ -186,7 +269,7 @@ var Player = function () {
         key: 'flushBufferQueue',
         value: function flushBufferQueue() {
             if (this.sourceBuffer.updating || !this.bufferQueue.length) {
-                this.checkEnd();
+                // this.checkEnd();
                 return;
             }
             var bufferData = this.concatBuffer();
@@ -221,17 +304,21 @@ var Player = function () {
                 this.logBox = document.createElement('div');
                 this.playerBox.appendChild(this.logBox);
             }
-            this.logBox.innerHTML = text;
+            var rendition = this.rendition ? 'Low' : 'High';
+            this.logBox.innerHTML = 'Rendition: ' + rendition + ' <br>  \n             Information: ' + text + ' ';
         }
     }, {
         key: 'clearUp',
         value: function clearUp() {
             if (this.videoElement) {
                 this.videoElement.remove();
+            }
+            try {
+                _eventBus2.default.removeEvent();
                 delete this.mediaSource;
                 delete this.sourceBuffer;
                 delete this.bufferQueue;
-            }
+            } catch (e) {}
         }
     }]);
 
@@ -239,7 +326,7 @@ var Player = function () {
 }();
 
 exports.default = Player;
-},{"./Segment":2,"./utils/event-bus":4,"./utils/resolve-url":6,"global/window":10,"m3u8-parser":8}],2:[function(require,module,exports){
+},{"./PlayList":1,"./Segment":3,"./utils/event-bus":5,"./utils/resolve-url":7,"global/window":11,"m3u8-parser":9}],3:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -273,6 +360,7 @@ var Segment = function () {
         this.timeline = timeline;
         this.remuxedSegment = null;
         this.bufferData = null;
+        // this.baseMediaDecodeTime = timeStart;
 
         this.abort = false;
         this.requested = false; //是否已经请求过了
@@ -282,12 +370,16 @@ var Segment = function () {
 
     _createClass(Segment, [{
         key: 'initTransmuxer',
-        value: function initTransmuxer(callback) {
+        value: function initTransmuxer() {
             var _this = this;
 
-            this.transmuxer = new _mp2.default.Transmuxer();
+            console.log('basetime', this.baseMediaDecodeTime);
+            this.transmuxer = new _mp2.default.Transmuxer({
+                // baseMediaDecodeTime: this.baseMediaDecodeTime*1000
+            });
             this.transmuxer.on('data', function (segment) {
                 _this.getRemuxedData(segment);
+                delete _this.transmuxer;
             });
         }
     }, {
@@ -312,9 +404,12 @@ var Segment = function () {
         }
     }, {
         key: 'download',
-        value: function download(callback) {
+        value: function download() {
+            if (this.requested) {
+                return;
+            }
             this.requested = true;
-            this.initTransmuxer(callback);
+            this.initTransmuxer();
             var self = this;
             fetch(this.url, {}).then(function (response) {
                 return response.arrayBuffer();
@@ -330,7 +425,7 @@ var Segment = function () {
 }();
 
 exports.default = Segment;
-},{"./utils/event-bus":4,"mux.js/lib/mp4":20}],3:[function(require,module,exports){
+},{"./utils/event-bus":5,"mux.js/lib/mp4":21}],4:[function(require,module,exports){
 'use strict';
 
 var _Player = require('./Player.js');
@@ -339,20 +434,21 @@ var _Player2 = _interopRequireDefault(_Player);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-var myPlayer = new _Player2.default('player-box'); /*
-                                                   * @Author: Mayde
-                                                   * @Email:  maysjtu@163.com
-                                                   * @Date:   2018-07-11 19:39:27
-                                                   * @Last Modified by:   Mayde
-                                                   * @Last Modified time: 2018-07-11 19:44:30
-                                                   */
-
+var myPlayer = new _Player2.default('player-box');
 var button = document.getElementById('button');
+var changeBtn = document.getElementById('change');
 
 button.addEventListener('click', function () {
-	myPlayer.fetchM3U8('../assets/cg.m3u8');
+	myPlayer.loadSource({
+		rendition0: '../docs/assets/cg.m3u8',
+		rendition1: '../docs/assets/cg_160.m3u8'
+	});
 });
-},{"./Player.js":1}],4:[function(require,module,exports){
+
+changeBtn.addEventListener('click', function () {
+	myPlayer.changeRendition();
+});
+},{"./Player.js":2}],5:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -396,6 +492,9 @@ var EventBusClass = function () {
         key: 'emit',
         value: function emit(type, params) {
             var data = this.data;
+            if (!data.handlers) {
+                return;
+            }
             var handlers = data.handlers[type];
             if (handlers) {
                 handlers.forEach(function (handler) {
@@ -439,7 +538,7 @@ var EventBusClass = function () {
 
 var EventBus = new EventBusClass();
 exports.default = EventBus;
-},{"./guid":5}],5:[function(require,module,exports){
+},{"./guid":6}],6:[function(require,module,exports){
 "use strict";
 
 Object.defineProperty(exports, "__esModule", {
@@ -451,7 +550,7 @@ var _guid = 1;
 function newGuid() {
     return _guid++;
 }
-},{}],6:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -502,7 +601,7 @@ function getAbsoluteUrl(url) {
 }
 exports.resolveUrl = resolveUrl;
 exports.getAbsoluteUrl = getAbsoluteUrl;
-},{"global/document":9,"global/window":10,"url-toolkit":7}],7:[function(require,module,exports){
+},{"global/document":10,"global/window":11,"url-toolkit":8}],8:[function(require,module,exports){
 // see https://tools.ietf.org/html/rfc1808
 
 /* jshint ignore:start */
@@ -667,7 +766,7 @@ exports.getAbsoluteUrl = getAbsoluteUrl;
 })(this);
 /* jshint ignore:end */
 
-},{}],8:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 'use strict';
 
 var classCallCheck = function (instance, Constructor) {
@@ -1797,7 +1896,7 @@ exports.LineStream = LineStream;
 exports.ParseStream = ParseStream;
 exports.Parser = Parser;
 
-},{}],9:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 (function (global){
 var topLevel = typeof global !== 'undefined' ? global :
     typeof window !== 'undefined' ? window : {}
@@ -1818,7 +1917,7 @@ if (typeof document !== 'undefined') {
 module.exports = doccy;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"min-document":26}],10:[function(require,module,exports){
+},{"min-document":27}],11:[function(require,module,exports){
 (function (global){
 var win;
 
@@ -1835,7 +1934,7 @@ if (typeof window !== "undefined") {
 module.exports = win;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],11:[function(require,module,exports){
+},{}],12:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -1980,7 +2079,7 @@ AacStream.prototype = new Stream();
 
 module.exports = AacStream;
 
-},{"../utils/stream.js":25}],12:[function(require,module,exports){
+},{"../utils/stream.js":26}],13:[function(require,module,exports){
 'use strict';
 
 var Stream = require('../utils/stream.js');
@@ -2114,7 +2213,7 @@ AdtsStream.prototype = new Stream();
 
 module.exports = AdtsStream;
 
-},{"../utils/stream.js":25}],13:[function(require,module,exports){
+},{"../utils/stream.js":26}],14:[function(require,module,exports){
 'use strict';
 
 var Stream = require('../utils/stream.js');
@@ -2534,7 +2633,7 @@ module.exports = {
   NalByteStream: NalByteStream
 };
 
-},{"../utils/exp-golomb.js":24,"../utils/stream.js":25}],14:[function(require,module,exports){
+},{"../utils/exp-golomb.js":25,"../utils/stream.js":26}],15:[function(require,module,exports){
 var highPrefix = [33, 16, 5, 32, 164, 27];
 var lowPrefix = [33, 65, 108, 84, 1, 2, 4, 8, 168, 2, 4, 8, 17, 191, 252];
 var zeroFill = function(count) {
@@ -2571,7 +2670,7 @@ var coneOfSilence = {
 
 module.exports = makeTable(coneOfSilence);
 
-},{}],15:[function(require,module,exports){
+},{}],16:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -3438,7 +3537,7 @@ module.exports = {
   Cea608Stream: Cea608Stream
 };
 
-},{"../utils/stream":25}],16:[function(require,module,exports){
+},{"../utils/stream":26}],17:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -3946,7 +4045,7 @@ for (var type in StreamTypes) {
 
 module.exports = m2ts;
 
-},{"../utils/stream.js":25,"./caption-stream":15,"./metadata-stream":17,"./stream-types":18,"./stream-types.js":18,"./timestamp-rollover-stream":19}],17:[function(require,module,exports){
+},{"../utils/stream.js":26,"./caption-stream":16,"./metadata-stream":18,"./stream-types":19,"./stream-types.js":19,"./timestamp-rollover-stream":20}],18:[function(require,module,exports){
 /**
  * Accepts program elementary stream (PES) data events and parses out
  * ID3 metadata from them, if present.
@@ -4196,7 +4295,7 @@ MetadataStream.prototype = new Stream();
 
 module.exports = MetadataStream;
 
-},{"../utils/stream":25,"./stream-types":18}],18:[function(require,module,exports){
+},{"../utils/stream":26,"./stream-types":19}],19:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -4205,7 +4304,7 @@ module.exports = {
   METADATA_STREAM_TYPE: 0x15
 };
 
-},{}],19:[function(require,module,exports){
+},{}],20:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -4291,7 +4390,7 @@ module.exports = {
   handleRollover: handleRollover
 };
 
-},{"../utils/stream":25}],20:[function(require,module,exports){
+},{"../utils/stream":26}],21:[function(require,module,exports){
 module.exports = {
   generator: require('./mp4-generator'),
   Transmuxer: require('./transmuxer').Transmuxer,
@@ -4299,7 +4398,7 @@ module.exports = {
   VideoSegmentStream: require('./transmuxer').VideoSegmentStream
 };
 
-},{"./mp4-generator":21,"./transmuxer":22}],21:[function(require,module,exports){
+},{"./mp4-generator":22,"./transmuxer":23}],22:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -5071,7 +5170,7 @@ module.exports = {
   }
 };
 
-},{}],22:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -6543,7 +6642,7 @@ module.exports = {
   VIDEO_PROPERTIES: VIDEO_PROPERTIES
 };
 
-},{"../aac":11,"../codecs/adts.js":12,"../codecs/h264":13,"../data/silence":14,"../m2ts/m2ts.js":16,"../utils/clock":23,"../utils/stream.js":25,"./mp4-generator.js":21}],23:[function(require,module,exports){
+},{"../aac":12,"../codecs/adts.js":13,"../codecs/h264":14,"../data/silence":15,"../m2ts/m2ts.js":17,"../utils/clock":24,"../utils/stream.js":26,"./mp4-generator.js":22}],24:[function(require,module,exports){
 var
   ONE_SECOND_IN_TS = 90000, // 90kHz clock
   secondsToVideoTs,
@@ -6586,7 +6685,7 @@ module.exports = {
   videoTsToAudioTs: videoTsToAudioTs
 };
 
-},{}],24:[function(require,module,exports){
+},{}],25:[function(require,module,exports){
 'use strict';
 
 var ExpGolomb;
@@ -6735,7 +6834,7 @@ ExpGolomb = function(workingData) {
 
 module.exports = ExpGolomb;
 
-},{}],25:[function(require,module,exports){
+},{}],26:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -6854,6 +6953,6 @@ Stream.prototype.flush = function(flushSource) {
 
 module.exports = Stream;
 
-},{}],26:[function(require,module,exports){
+},{}],27:[function(require,module,exports){
 
-},{}]},{},[3]);
+},{}]},{},[4]);
