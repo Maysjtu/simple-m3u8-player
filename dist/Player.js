@@ -130,7 +130,6 @@ var Player = function () {
             this.sourceBuffer = this.mediaSource.addSourceBuffer(this.mime);
             this.sourceBuffer.addEventListener('updateend', function () {
                 _this5.log('Ready');
-                // this.updateEnd();
                 _this5.flushBufferQueue();
             });
             this.watchVideoOperation();
@@ -139,7 +138,7 @@ var Player = function () {
     }, {
         key: 'downloadInitSegment',
         value: function downloadInitSegment() {
-            console.log('download init');
+            this.log('download init');
             this.segments[0].isInitSegment = true;
             this.segments[0].download();
         }
@@ -207,17 +206,9 @@ var Player = function () {
             }
         }
     }, {
-        key: 'updateEnd',
-        value: function updateEnd() {
-            if (!this.sourceBuffer.updating && this.mediaSource.readyState === 'open' && this.index == this.playManifest.segments.length - 1) {
-                // this.videoElement.play();
-                return;
-            }
-        }
-    }, {
         key: 'appendBuffer',
         value: function appendBuffer(data) {
-            console.log('apendding');
+            this.log('appending buffer');
 
             this.sourceBuffer.timestampOffset = this.timestampOffset;
             this.sourceBuffer.appendBuffer(data);

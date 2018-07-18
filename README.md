@@ -1,8 +1,6 @@
 # simple-m3u8-player
 A simple m3u8 player with buffer control and adaptive streaming.
 
-[demo](https://maysjtu.github.io/simple-m3u8-player/)
-
 The purpose of creating this library is to learn MSE details and hls playback process.
 
 
@@ -10,6 +8,8 @@ The purpose of creating this library is to learn MSE details and hls playback pr
 # Build and view demo
 
 `npm install -g gulp gulp-cli live-server`
+
+`npm install`
 
 `npm run build`
 
