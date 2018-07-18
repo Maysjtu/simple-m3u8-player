@@ -12,5 +12,5 @@ let myPlayer = new Player('player-box');
 let button = document.getElementById('button');
 
 button.addEventListener('click',function() {
-	myPlayer.fetchM3U8('../assets/cg.m3u8');
+	myPlayer.fetchM3U8('../docs/assets/cg.m3u8');
 });

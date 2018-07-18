@@ -35,6 +35,7 @@
     "vinyl-source-stream": "^2.0.0"
   },
   "scripts": {
-    "dev": "gulp start"
+    "dev": "gulp start",
+    "build": "gulp build"
   }
 }
