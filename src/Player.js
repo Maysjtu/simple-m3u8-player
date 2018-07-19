@@ -1,8 +1,4 @@
-import m3u8Parser from 'm3u8-parser'
-import {resolveUrl} from './utils/resolve-url'
-import {getAbsoluteUrl} from './utils/resolve-url'
 import window from 'global/window'
-import Segment from "./Segment";
 import EventBus from './utils/event-bus'
 import PlayList from './PlayList'
 
