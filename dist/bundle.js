@@ -80,7 +80,7 @@ var PlayList = function () {
 }();
 
 exports.default = PlayList;
-},{"./Segment":3,"./utils/event-bus":5,"./utils/resolve-url":7,"m3u8-parser":9}],2:[function(require,module,exports){
+},{"./Segment":3,"./utils/event-bus":5,"./utils/resolve-url":7,"m3u8-parser":8}],2:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -326,7 +326,7 @@ var Player = function () {
 }();
 
 exports.default = Player;
-},{"./PlayList":1,"./Segment":3,"./utils/event-bus":5,"./utils/resolve-url":7,"global/window":11,"m3u8-parser":9}],3:[function(require,module,exports){
+},{"./PlayList":1,"./Segment":3,"./utils/event-bus":5,"./utils/resolve-url":7,"global/window":9,"m3u8-parser":8}],3:[function(require,module,exports){
 'use strict';
 
 Object.defineProperty(exports, "__esModule", {
@@ -373,7 +373,6 @@ var Segment = function () {
         value: function initTransmuxer() {
             var _this = this;
 
-            console.log('basetime', this.baseMediaDecodeTime);
             this.transmuxer = new _mp2.default.Transmuxer({
                 // baseMediaDecodeTime: this.baseMediaDecodeTime*1000
             });
@@ -425,7 +424,7 @@ var Segment = function () {
 }();
 
 exports.default = Segment;
-},{"./utils/event-bus":5,"mux.js/lib/mp4":21}],4:[function(require,module,exports){
+},{"./utils/event-bus":5,"mux.js/lib/mp4":19}],4:[function(require,module,exports){
 'use strict';
 
 var _Player = require('./Player.js');
@@ -440,8 +439,8 @@ var changeBtn = document.getElementById('change');
 
 button.addEventListener('click', function () {
 	myPlayer.loadSource({
-		rendition0: 'http://p1yseh5av.bkt.clouddn.com/media/cg.m3u8',
-		rendition1: 'http://p1yseh5av.bkt.clouddn.com/media/cg_160.m3u8'
+		rendition0: 'https://static.kanhunli.cn/yunxi/yunxi-videoedit/static/media/cg.m3u8',
+		rendition1: 'https://static.kanhunli.cn/yunxi/yunxi-videoedit/static/media/cg_160.m3u8'
 	});
 });
 
@@ -551,222 +550,8 @@ function newGuid() {
     return _guid++;
 }
 },{}],7:[function(require,module,exports){
-'use strict';
 
-Object.defineProperty(exports, "__esModule", {
-    value: true
-});
-exports.getAbsoluteUrl = exports.resolveUrl = undefined;
-
-var _urlToolkit = require('url-toolkit');
-
-var _urlToolkit2 = _interopRequireDefault(_urlToolkit);
-
-var _window = require('global/window');
-
-var _window2 = _interopRequireDefault(_window);
-
-var _document = require('global/document');
-
-var _document2 = _interopRequireDefault(_document);
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
-
-function resolveUrl(baseURL, relativeURL) {
-    // return early if we don't need to resolve
-    if (/^[a-z]+:/i.test(relativeURL)) {
-        return relativeURL;
-    }
-
-    // if the base URL is relative then combine with the current location
-    if (!/\/\//i.test(baseURL)) {
-        baseURL = _urlToolkit2.default.buildAbsoluteURL(_window2.default.location.href, baseURL);
-    }
-
-    return _urlToolkit2.default.buildAbsoluteURL(baseURL, relativeURL);
-} /**
-   * @file resolve-url.js
-   */
-
-function getAbsoluteUrl(url) {
-    if (!url.match(/^https?:\/\//)) {
-        // Convert to absolute URL. Flash hosted off-site needs an absolute URL.
-        var div = _document2.default.createElement('div');
-
-        div.innerHTML = '<a href="' + url + '">x</a>';
-        url = div.firstChild.href;
-    }
-
-    return url;
-}
-exports.resolveUrl = resolveUrl;
-exports.getAbsoluteUrl = getAbsoluteUrl;
-},{"global/document":10,"global/window":11,"url-toolkit":8}],8:[function(require,module,exports){
-// see https://tools.ietf.org/html/rfc1808
-
-/* jshint ignore:start */
-(function(root) { 
-/* jshint ignore:end */
-
-  var URL_REGEX = /^((?:[a-zA-Z0-9+\-.]+:)?)(\/\/[^\/\;?#]*)?(.*?)??(;.*?)?(\?.*?)?(#.*?)?$/;
-  var FIRST_SEGMENT_REGEX = /^([^\/;?#]*)(.*)$/;
-  var SLASH_DOT_REGEX = /(?:\/|^)\.(?=\/)/g;
-  var SLASH_DOT_DOT_REGEX = /(?:\/|^)\.\.\/(?!\.\.\/).*?(?=\/)/g;
-
-  var URLToolkit = { // jshint ignore:line
-    // If opts.alwaysNormalize is true then the path will always be normalized even when it starts with / or //
-    // E.g
-    // With opts.alwaysNormalize = false (default, spec compliant)
-    // http://a.com/b/cd + /e/f/../g => http://a.com/e/f/../g
-    // With opts.alwaysNormalize = true (not spec compliant)
-    // http://a.com/b/cd + /e/f/../g => http://a.com/e/g
-    buildAbsoluteURL: function(baseURL, relativeURL, opts) {
-      opts = opts || {};
-      // remove any remaining space and CRLF
-      baseURL = baseURL.trim();
-      relativeURL = relativeURL.trim();
-      if (!relativeURL) {
-        // 2a) If the embedded URL is entirely empty, it inherits the
-        // entire base URL (i.e., is set equal to the base URL)
-        // and we are done.
-        if (!opts.alwaysNormalize) {
-          return baseURL;
-        }
-        var basePartsForNormalise = URLToolkit.parseURL(baseURL);
-        if (!basePartsForNormalise) {
-          throw new Error('Error trying to parse base URL.');
-        }
-        basePartsForNormalise.path = URLToolkit.normalizePath(basePartsForNormalise.path);
-        return URLToolkit.buildURLFromParts(basePartsForNormalise);
-      }
-      var relativeParts = URLToolkit.parseURL(relativeURL);
-      if (!relativeParts) {
-        throw new Error('Error trying to parse relative URL.');
-      }
-      if (relativeParts.scheme) {
-        // 2b) If the embedded URL starts with a scheme name, it is
-        // interpreted as an absolute URL and we are done.
-        if (!opts.alwaysNormalize) {
-          return relativeURL;
-        }
-        relativeParts.path = URLToolkit.normalizePath(relativeParts.path);
-        return URLToolkit.buildURLFromParts(relativeParts);
-      }
-      var baseParts = URLToolkit.parseURL(baseURL);
-      if (!baseParts) {
-        throw new Error('Error trying to parse base URL.');
-      }
-      if (!baseParts.netLoc && baseParts.path && baseParts.path[0] !== '/') {
-        // If netLoc missing and path doesn't start with '/', assume everthing before the first '/' is the netLoc
-        // This causes 'example.com/a' to be handled as '//example.com/a' instead of '/example.com/a'
-        var pathParts = FIRST_SEGMENT_REGEX.exec(baseParts.path);
-        baseParts.netLoc = pathParts[1];
-        baseParts.path = pathParts[2];
-      }
-      if (baseParts.netLoc && !baseParts.path) {
-        baseParts.path = '/';
-      }
-      var builtParts = {
-        // 2c) Otherwise, the embedded URL inherits the scheme of
-        // the base URL.
-        scheme: baseParts.scheme,
-        netLoc: relativeParts.netLoc,
-        path: null,
-        params: relativeParts.params,
-        query: relativeParts.query,
-        fragment: relativeParts.fragment
-      };
-      if (!relativeParts.netLoc) {
-        // 3) If the embedded URL's <net_loc> is non-empty, we skip to
-        // Step 7.  Otherwise, the embedded URL inherits the <net_loc>
-        // (if any) of the base URL.
-        builtParts.netLoc = baseParts.netLoc;
-        // 4) If the embedded URL path is preceded by a slash "/", the
-        // path is not relative and we skip to Step 7.
-        if (relativeParts.path[0] !== '/') {
-          if (!relativeParts.path) {
-            // 5) If the embedded URL path is empty (and not preceded by a
-            // slash), then the embedded URL inherits the base URL path
-            builtParts.path = baseParts.path;
-            // 5a) if the embedded URL's <params> is non-empty, we skip to
-            // step 7; otherwise, it inherits the <params> of the base
-            // URL (if any) and
-            if (!relativeParts.params) {
-              builtParts.params = baseParts.params;
-              // 5b) if the embedded URL's <query> is non-empty, we skip to
-              // step 7; otherwise, it inherits the <query> of the base
-              // URL (if any) and we skip to step 7.
-              if (!relativeParts.query) {
-                builtParts.query = baseParts.query;
-              }
-            }
-          } else {
-            // 6) The last segment of the base URL's path (anything
-            // following the rightmost slash "/", or the entire path if no
-            // slash is present) is removed and the embedded URL's path is
-            // appended in its place.
-            var baseURLPath = baseParts.path;
-            var newPath = baseURLPath.substring(0, baseURLPath.lastIndexOf('/') + 1) + relativeParts.path;
-            builtParts.path = URLToolkit.normalizePath(newPath);
-          }
-        }
-      }
-      if (builtParts.path === null) {
-        builtParts.path = opts.alwaysNormalize ? URLToolkit.normalizePath(relativeParts.path) : relativeParts.path;
-      }
-      return URLToolkit.buildURLFromParts(builtParts);
-    },
-    parseURL: function(url) {
-      var parts = URL_REGEX.exec(url);
-      if (!parts) {
-        return null;
-      }
-      return {
-        scheme: parts[1] || '',
-        netLoc: parts[2] || '',
-        path: parts[3] || '',
-        params: parts[4] || '',
-        query: parts[5] || '',
-        fragment: parts[6] || ''
-      };
-    },
-    normalizePath: function(path) {
-      // The following operations are
-      // then applied, in order, to the new path:
-      // 6a) All occurrences of "./", where "." is a complete path
-      // segment, are removed.
-      // 6b) If the path ends with "." as a complete path segment,
-      // that "." is removed.
-      path = path.split('').reverse().join('').replace(SLASH_DOT_REGEX, '');
-      // 6c) All occurrences of "<segment>/../", where <segment> is a
-      // complete path segment not equal to "..", are removed.
-      // Removal of these path segments is performed iteratively,
-      // removing the leftmost matching pattern on each iteration,
-      // until no matching pattern remains.
-      // 6d) If the path ends with "<segment>/..", where <segment> is a
-      // complete path segment not equal to "..", that
-      // "<segment>/.." is removed.
-      while (path.length !== (path = path.replace(SLASH_DOT_DOT_REGEX, '')).length) {} // jshint ignore:line
-      return path.split('').reverse().join('');
-    },
-    buildURLFromParts: function(parts) {
-      return parts.scheme + parts.netLoc + parts.path + parts.params + parts.query + parts.fragment;
-    }
-  };
-
-/* jshint ignore:start */
-  if(typeof exports === 'object' && typeof module === 'object')
-    module.exports = URLToolkit;
-  else if(typeof define === 'function' && define.amd)
-    define([], function() { return URLToolkit; });
-  else if(typeof exports === 'object')
-    exports["URLToolkit"] = URLToolkit;
-  else
-    root["URLToolkit"] = URLToolkit;
-})(this);
-/* jshint ignore:end */
-
-},{}],9:[function(require,module,exports){
+},{}],8:[function(require,module,exports){
 'use strict';
 
 var classCallCheck = function (instance, Constructor) {
@@ -1896,28 +1681,7 @@ exports.LineStream = LineStream;
 exports.ParseStream = ParseStream;
 exports.Parser = Parser;
 
-},{}],10:[function(require,module,exports){
-(function (global){
-var topLevel = typeof global !== 'undefined' ? global :
-    typeof window !== 'undefined' ? window : {}
-var minDoc = require('min-document');
-
-var doccy;
-
-if (typeof document !== 'undefined') {
-    doccy = document;
-} else {
-    doccy = topLevel['__GLOBAL_DOCUMENT_CACHE@4'];
-
-    if (!doccy) {
-        doccy = topLevel['__GLOBAL_DOCUMENT_CACHE@4'] = minDoc;
-    }
-}
-
-module.exports = doccy;
-
-}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"min-document":27}],11:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 (function (global){
 var win;
 
@@ -1934,7 +1698,7 @@ if (typeof window !== "undefined") {
 module.exports = win;
 
 }).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{}],12:[function(require,module,exports){
+},{}],10:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -2079,7 +1843,7 @@ AacStream.prototype = new Stream();
 
 module.exports = AacStream;
 
-},{"../utils/stream.js":26}],13:[function(require,module,exports){
+},{"../utils/stream.js":24}],11:[function(require,module,exports){
 'use strict';
 
 var Stream = require('../utils/stream.js');
@@ -2213,7 +1977,7 @@ AdtsStream.prototype = new Stream();
 
 module.exports = AdtsStream;
 
-},{"../utils/stream.js":26}],14:[function(require,module,exports){
+},{"../utils/stream.js":24}],12:[function(require,module,exports){
 'use strict';
 
 var Stream = require('../utils/stream.js');
@@ -2633,7 +2397,7 @@ module.exports = {
   NalByteStream: NalByteStream
 };
 
-},{"../utils/exp-golomb.js":25,"../utils/stream.js":26}],15:[function(require,module,exports){
+},{"../utils/exp-golomb.js":23,"../utils/stream.js":24}],13:[function(require,module,exports){
 var highPrefix = [33, 16, 5, 32, 164, 27];
 var lowPrefix = [33, 65, 108, 84, 1, 2, 4, 8, 168, 2, 4, 8, 17, 191, 252];
 var zeroFill = function(count) {
@@ -2670,7 +2434,7 @@ var coneOfSilence = {
 
 module.exports = makeTable(coneOfSilence);
 
-},{}],16:[function(require,module,exports){
+},{}],14:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -3537,7 +3301,7 @@ module.exports = {
   Cea608Stream: Cea608Stream
 };
 
-},{"../utils/stream":26}],17:[function(require,module,exports){
+},{"../utils/stream":24}],15:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -4045,7 +3809,7 @@ for (var type in StreamTypes) {
 
 module.exports = m2ts;
 
-},{"../utils/stream.js":26,"./caption-stream":16,"./metadata-stream":18,"./stream-types":19,"./stream-types.js":19,"./timestamp-rollover-stream":20}],18:[function(require,module,exports){
+},{"../utils/stream.js":24,"./caption-stream":14,"./metadata-stream":16,"./stream-types":17,"./stream-types.js":17,"./timestamp-rollover-stream":18}],16:[function(require,module,exports){
 /**
  * Accepts program elementary stream (PES) data events and parses out
  * ID3 metadata from them, if present.
@@ -4295,7 +4059,7 @@ MetadataStream.prototype = new Stream();
 
 module.exports = MetadataStream;
 
-},{"../utils/stream":26,"./stream-types":19}],19:[function(require,module,exports){
+},{"../utils/stream":24,"./stream-types":17}],17:[function(require,module,exports){
 'use strict';
 
 module.exports = {
@@ -4304,7 +4068,7 @@ module.exports = {
   METADATA_STREAM_TYPE: 0x15
 };
 
-},{}],20:[function(require,module,exports){
+},{}],18:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -4390,7 +4154,7 @@ module.exports = {
   handleRollover: handleRollover
 };
 
-},{"../utils/stream":26}],21:[function(require,module,exports){
+},{"../utils/stream":24}],19:[function(require,module,exports){
 module.exports = {
   generator: require('./mp4-generator'),
   Transmuxer: require('./transmuxer').Transmuxer,
@@ -4398,7 +4162,7 @@ module.exports = {
   VideoSegmentStream: require('./transmuxer').VideoSegmentStream
 };
 
-},{"./mp4-generator":22,"./transmuxer":23}],22:[function(require,module,exports){
+},{"./mp4-generator":20,"./transmuxer":21}],20:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -5170,7 +4934,7 @@ module.exports = {
   }
 };
 
-},{}],23:[function(require,module,exports){
+},{}],21:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -6642,7 +6406,7 @@ module.exports = {
   VIDEO_PROPERTIES: VIDEO_PROPERTIES
 };
 
-},{"../aac":12,"../codecs/adts.js":13,"../codecs/h264":14,"../data/silence":15,"../m2ts/m2ts.js":17,"../utils/clock":24,"../utils/stream.js":26,"./mp4-generator.js":22}],24:[function(require,module,exports){
+},{"../aac":10,"../codecs/adts.js":11,"../codecs/h264":12,"../data/silence":13,"../m2ts/m2ts.js":15,"../utils/clock":22,"../utils/stream.js":24,"./mp4-generator.js":20}],22:[function(require,module,exports){
 var
   ONE_SECOND_IN_TS = 90000, // 90kHz clock
   secondsToVideoTs,
@@ -6685,7 +6449,7 @@ module.exports = {
   videoTsToAudioTs: videoTsToAudioTs
 };
 
-},{}],25:[function(require,module,exports){
+},{}],23:[function(require,module,exports){
 'use strict';
 
 var ExpGolomb;
@@ -6834,7 +6598,7 @@ ExpGolomb = function(workingData) {
 
 module.exports = ExpGolomb;
 
-},{}],26:[function(require,module,exports){
+},{}],24:[function(require,module,exports){
 /**
  * mux.js
  *
@@ -6952,7 +6716,5 @@ Stream.prototype.flush = function(flushSource) {
 };
 
 module.exports = Stream;
-
-},{}],27:[function(require,module,exports){
 
 },{}]},{},[4]);

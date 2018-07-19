@@ -12,8 +12,8 @@ var changeBtn = document.getElementById('change');
 
 button.addEventListener('click', function () {
 	myPlayer.loadSource({
-		rendition0: 'http://p1yseh5av.bkt.clouddn.com/media/cg.m3u8',
-		rendition1: 'http://p1yseh5av.bkt.clouddn.com/media/cg_160.m3u8'
+		rendition0: 'https://static.kanhunli.cn/yunxi/yunxi-videoedit/static/media/cg.m3u8',
+		rendition1: 'https://static.kanhunli.cn/yunxi/yunxi-videoedit/static/media/cg_160.m3u8'
 	});
 });
 

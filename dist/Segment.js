@@ -44,7 +44,6 @@ var Segment = function () {
         value: function initTransmuxer() {
             var _this = this;
 
-            console.log('basetime', this.baseMediaDecodeTime);
             this.transmuxer = new _mp2.default.Transmuxer({
                 // baseMediaDecodeTime: this.baseMediaDecodeTime*1000
             });

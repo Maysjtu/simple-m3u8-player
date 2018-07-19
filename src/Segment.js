@@ -20,7 +20,6 @@ export default class Segment {
     }
 
     initTransmuxer() {
-        console.log('basetime', this.baseMediaDecodeTime);
         this.transmuxer = new mp4.Transmuxer({
             // baseMediaDecodeTime: this.baseMediaDecodeTime*1000
         });
